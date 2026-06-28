@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -22,10 +23,8 @@ import Video, {
   type VideoRef,
 } from 'react-native-video';
 import {CutSceneEditor} from '../components/CutSceneEditor';
-import {
-  PLAYER_SKIP_SECONDS,
-  VideoControls,
-} from '../components/VideoControls';
+import {VideoPlayerPanel} from '../components/VideoPlayerPanel';
+import {PLAYER_SKIP_SECONDS} from '../components/VideoControls';
 import {SKIP_LEAD_TIME_SECONDS} from '../constants/playback';
 import {useFrameSkipper} from '../hooks/useFrameSkipper';
 import {
@@ -59,6 +58,8 @@ import {cutScenesToSkipIntervals} from '../utils/movieMappers';
 
 export function VideoPlayerScreen() {
   const insets = useSafeAreaInsets();
+  const {width, height} = useWindowDimensions();
+  const isLandscape = width > height;
   const videoRef = useRef<VideoRef>(null);
 
   const [step, setStep] = useState<SetupStep>('welcome');
@@ -86,6 +87,7 @@ export function VideoPlayerScreen() {
   const [cutSceneError, setCutSceneError] = useState<string | null>(null);
 
   const [paused, setPaused] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
@@ -176,6 +178,7 @@ export function VideoPlayerScreen() {
     setErrorMessage(null);
     setCutSceneError(null);
     setPaused(false);
+    setVolume(1);
     setDuration(0);
     setCurrentTime(0);
     setSkipNotice(null);
@@ -686,83 +689,45 @@ export function VideoPlayerScreen() {
       ) : null}
 
       {step === 'playing' && videoUri ? (
-        <View style={styles.playerContainer}>
-          <View style={styles.videoWrapper}>
-            <Video
-              ref={videoRef}
-              source={{uri: videoUri}}
-              style={styles.video}
-              resizeMode="contain"
-              paused={paused}
-              controls={false}
-              progressUpdateInterval={100}
-              onLoad={handleVideoLoad}
-              onProgress={handleVideoProgress}
-              onSeek={handleVideoSeek}
-            />
-
-            {skipNotice ? (
-              <View style={styles.skipNotice}>
-                <Text style={styles.skipNoticeText}>{skipNotice}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <VideoControls
-            paused={paused}
-            currentTime={currentTime}
-            duration={duration}
-            isScrubbing={isScrubbing}
-            scrubTime={scrubTime}
-            onPlayPause={() => setPaused(value => !value)}
-            onSkipBack={() => seekTo(currentTime - PLAYER_SKIP_SECONDS)}
-            onSkipForward={() => seekTo(currentTime + PLAYER_SKIP_SECONDS)}
-            onScrubStart={() => {
-              setIsScrubbing(true);
-              setScrubTime(currentTime);
-            }}
-            onScrubChange={setScrubTime}
-            onScrubComplete={time => {
-              setIsScrubbing(false);
-              seekTo(time);
-            }}
-          />
-
-          <View style={styles.infoPanel}>
-            <Text style={styles.contentTypeBadge}>
-              {contentType === 'episode' ? 'Web series' : 'Movie'}
-            </Text>
-            <Text style={styles.infoTitle}>{contentLabel}</Text>
-            <Text style={styles.infoSubtitle}>ID: {contentId}</Text>
-
-            {skipIntervals.length > 0 ? (
-              skipIntervals.map(interval => (
-                <Text
-                  key={`${interval.start}-${interval.end}`}
-                  style={styles.infoRow}>
-                  {interval.label ? `${interval.label}: ` : ''}
-                  {formatTimestamp(interval.start)} –{' '}
-                  {formatTimestamp(interval.end)}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.infoRow}>No cut scenes — playing full video.</Text>
-            )}
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={resetSession}
-              style={({pressed}) => [
-                styles.secondaryButton,
-                pressed && styles.secondaryButtonPressed,
-              ]}>
-              <Text style={styles.secondaryButtonText}>Choose another video</Text>
-            </Pressable>
-          </View>
-        </View>
+        <VideoPlayerPanel
+          videoRef={videoRef}
+          videoUri={videoUri}
+          paused={paused}
+          volume={volume}
+          duration={duration}
+          currentTime={currentTime}
+          isScrubbing={isScrubbing}
+          scrubTime={scrubTime}
+          skipNotice={skipNotice}
+          contentType={contentType}
+          contentLabel={contentLabel}
+          contentId={contentId}
+          skipIntervals={skipIntervals}
+          onVideoLoad={handleVideoLoad}
+          onVideoProgress={handleVideoProgress}
+          onVideoSeek={handleVideoSeek}
+          onPlayPause={() => setPaused(value => !value)}
+          onSkipBack={() => seekTo(currentTime - PLAYER_SKIP_SECONDS)}
+          onSkipForward={() => seekTo(currentTime + PLAYER_SKIP_SECONDS)}
+          onScrubStart={() => {
+            setIsScrubbing(true);
+            setScrubTime(currentTime);
+          }}
+          onScrubChange={setScrubTime}
+          onScrubComplete={time => {
+            setIsScrubbing(false);
+            seekTo(time);
+          }}
+          onVolumeChange={setVolume}
+          onResetSession={resetSession}
+        />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={styles.setupScrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isLandscape && styles.scrollContentLandscape,
+          ]}
           keyboardShouldPersistTaps="handled">
           {step === 'welcome' ? (
             <>
@@ -1149,12 +1114,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 0,
   },
+  setupScrollView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 24,
     gap: 14,
+  },
+  scrollContentLandscape: {
+    justifyContent: 'flex-start',
+    paddingVertical: 16,
   },
   centeredStep: {
     alignItems: 'center',
@@ -1277,69 +1249,5 @@ const styles = StyleSheet.create({
     color: '#b8bec8',
     fontSize: 15,
     textAlign: 'center',
-  },
-  playerContainer: {
-    flex: 1,
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  videoWrapper: {
-    position: 'relative',
-  },
-  video: {
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  skipNotice: {
-    backgroundColor: 'rgba(59, 130, 246, 0.92)',
-    borderRadius: 8,
-    left: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    position: 'absolute',
-    right: 12,
-    top: 12,
-  },
-  skipNoticeText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  infoPanel: {
-    backgroundColor: '#1a1f27',
-    borderRadius: 12,
-    gap: 6,
-    padding: 16,
-  },
-  contentTypeBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#374151',
-    borderRadius: 6,
-    color: '#d1d5db',
-    fontSize: 11,
-    fontWeight: '600',
-    overflow: 'hidden',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    textTransform: 'uppercase',
-  },
-  infoTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  infoSubtitle: {
-    color: '#6b7280',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  infoRow: {
-    color: '#b8bec8',
-    fontSize: 14,
   },
 });

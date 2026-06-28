@@ -10,13 +10,29 @@ type VideoControlsProps = {
   duration: number;
   isScrubbing: boolean;
   scrubTime: number;
+  volume: number;
+  isFullscreen: boolean;
   onPlayPause: () => void;
   onSkipBack: () => void;
   onSkipForward: () => void;
   onScrubStart: () => void;
   onScrubChange: (value: number) => void;
   onScrubComplete: (value: number) => void;
+  onVolumeChange: (value: number) => void;
+  onToggleFullscreen: () => void;
 };
+
+function volumeIcon(level: number): string {
+  if (level === 0) {
+    return '🔇';
+  }
+
+  if (level < 0.5) {
+    return '🔉';
+  }
+
+  return '🔊';
+}
 
 export function VideoControls({
   paused,
@@ -24,18 +40,22 @@ export function VideoControls({
   duration,
   isScrubbing,
   scrubTime,
+  volume,
+  isFullscreen,
   onPlayPause,
   onSkipBack,
   onSkipForward,
   onScrubStart,
   onScrubChange,
   onScrubComplete,
+  onVolumeChange,
+  onToggleFullscreen,
 }: VideoControlsProps) {
   const displayTime = isScrubbing ? scrubTime : currentTime;
   const sliderValue = duration > 0 ? displayTime / duration : 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isFullscreen && styles.containerFullscreen]}>
       <Slider
         style={styles.slider}
         minimumValue={0}
@@ -53,6 +73,22 @@ export function VideoControls({
         <Text style={styles.timeText}>
           {formatTimestamp(displayTime)} / {formatTimestamp(duration)}
         </Text>
+      </View>
+
+      <View style={styles.volumeRow}>
+        <Text style={styles.volumeIcon}>{volumeIcon(volume)}</Text>
+        <Slider
+          accessibilityLabel="Volume"
+          style={styles.volumeSlider}
+          minimumValue={0}
+          maximumValue={1}
+          value={volume}
+          minimumTrackTintColor="#93c5fd"
+          maximumTrackTintColor="#3a3f4b"
+          thumbTintColor="#ffffff"
+          onValueChange={onVolumeChange}
+        />
+        <Text style={styles.volumeLabel}>{Math.round(volume * 100)}%</Text>
       </View>
 
       <View style={styles.buttonsRow}>
@@ -82,6 +118,19 @@ export function VideoControls({
           style={({pressed}) => [styles.controlButton, pressed && styles.pressed]}>
           <Text style={styles.controlButtonText}>+{SKIP_SECONDS}s</Text>
         </Pressable>
+
+        <Pressable
+          accessibilityLabel={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          accessibilityRole="button"
+          onPress={onToggleFullscreen}
+          style={({pressed}) => [
+            styles.controlButton,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.controlButtonText}>
+            {isFullscreen ? 'Exit' : 'Full'}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -97,6 +146,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  containerFullscreen: {
+    backgroundColor: 'rgba(26, 31, 39, 0.92)',
+    borderRadius: 0,
+  },
   slider: {
     height: 40,
     width: '100%',
@@ -109,11 +162,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontVariant: ['tabular-nums'],
   },
+  volumeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+  },
+  volumeIcon: {
+    fontSize: 16,
+    width: 24,
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 36,
+  },
+  volumeLabel: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    width: 36,
+  },
   buttonsRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 20,
+    gap: 12,
     marginTop: 4,
   },
   controlButton: {
@@ -122,13 +196,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
-    minWidth: 64,
-    paddingHorizontal: 12,
+    minWidth: 56,
+    paddingHorizontal: 10,
     paddingVertical: 10,
   },
   controlButtonText: {
     color: '#e5e7eb',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   playButton: {
