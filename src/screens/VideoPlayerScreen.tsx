@@ -722,6 +722,7 @@ export function VideoPlayerScreen() {
           }}
           onVolumeChange={setVolume}
           onResetSession={resetSession}
+          onBackFromPlayer={resetSession}
         />
       ) : (
         <ScrollView

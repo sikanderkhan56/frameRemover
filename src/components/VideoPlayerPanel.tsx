@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject} from 'react';
 import {
   Animated,
+  BackHandler,
   Pressable,
   ScrollView,
   StatusBar,
@@ -47,6 +48,7 @@ type VideoPlayerPanelProps = {
   onScrubComplete: (value: number) => void;
   onVolumeChange: (value: number) => void;
   onResetSession: () => void;
+  onBackFromPlayer: () => void;
 };
 
 const HORIZONTAL_PADDING = 16;
@@ -76,6 +78,7 @@ export function VideoPlayerPanel({
   onScrubComplete,
   onVolumeChange,
   onResetSession,
+  onBackFromPlayer,
 }: VideoPlayerPanelProps) {
   const insets = useSafeAreaInsets();
   const {width: windowWidth, height: windowHeight} = useWindowDimensions();
@@ -106,6 +109,25 @@ export function VideoPlayerPanel({
     setIsFullscreen(false);
     setShowControls(true);
   }, []);
+
+  useEffect(() => {
+    const onHardwareBackPress = () => {
+      if (isFullscreen) {
+        exitFullscreen();
+        return true;
+      }
+
+      onBackFromPlayer();
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onHardwareBackPress,
+    );
+
+    return () => subscription.remove();
+  }, [exitFullscreen, isFullscreen, onBackFromPlayer]);
 
   const handleVideoLoad = useCallback(
     (data: OnLoadData) => {
