@@ -1,5 +1,6 @@
-import {useCallback, useState, type RefObject} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type RefObject} from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StatusBar,
@@ -18,6 +19,7 @@ import Video, {
 import type {ContentType} from '../types/content';
 import type {SkipInterval} from '../types/skipInterval';
 import {formatTimestamp} from '../utils/frameSkip';
+import {computeVideoFrame} from '../utils/videoLayout';
 import {VideoControls} from './VideoControls';
 
 type VideoPlayerPanelProps = {
@@ -47,6 +49,8 @@ type VideoPlayerPanelProps = {
   onResetSession: () => void;
 };
 
+const HORIZONTAL_PADDING = 16;
+
 export function VideoPlayerPanel({
   videoRef,
   videoUri,
@@ -74,127 +78,225 @@ export function VideoPlayerPanel({
   onResetSession,
 }: VideoPlayerPanelProps) {
   const insets = useSafeAreaInsets();
-  const {width, height} = useWindowDimensions();
-  const isLandscape = width > height;
+  const {width: windowWidth, height: windowHeight} = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
+  const controlsOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(controlsOpacity, {
+      toValue: showControls ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [controlsOpacity, showControls]);
+
+  const toggleControls = useCallback(() => {
+    setShowControls(value => !value);
+  }, []);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(value => !value);
+    setShowControls(true);
   }, []);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
+    setShowControls(true);
   }, []);
+
+  const handleVideoLoad = useCallback(
+    (data: OnLoadData) => {
+      const {width: naturalWidth, height: naturalHeight} = data.naturalSize;
+      if (naturalWidth > 0 && naturalHeight > 0) {
+        setVideoAspectRatio(naturalWidth / naturalHeight);
+      }
+      onVideoLoad(data);
+    },
+    [onVideoLoad],
+  );
+
+  const inlineStageSize = useMemo(() => {
+    const horizontalInset = isLandscape ? 12 : HORIZONTAL_PADDING;
+
+    if (isLandscape) {
+      const availableWidth = windowWidth - horizontalInset * 2 - 12;
+      const videoColumnWidth = availableWidth * (1.4 / 2.4);
+      return {
+        width: videoColumnWidth,
+        height: 220,
+      };
+    }
+
+    const stageWidth = windowWidth - horizontalInset * 2;
+    return {
+      width: stageWidth,
+      height: stageWidth * (9 / 16),
+    };
+  }, [isLandscape, windowWidth]);
+
+  const stageSize = isFullscreen
+    ? {width: windowWidth, height: windowHeight}
+    : inlineStageSize;
+
+  const videoFrame = useMemo(() => {
+    const mode = isFullscreen
+      ? isLandscape
+        ? 'cover'
+        : 'contain'
+      : 'contain';
+
+    return computeVideoFrame(
+      stageSize.width,
+      stageSize.height,
+      videoAspectRatio,
+      mode,
+    );
+  }, [
+    isFullscreen,
+    isLandscape,
+    stageSize.height,
+    stageSize.width,
+    videoAspectRatio,
+  ]);
+
+  const controlProps: ComponentProps<typeof VideoControls> = {
+    paused,
+    currentTime,
+    duration,
+    isScrubbing,
+    scrubTime,
+    volume,
+    isFullscreen,
+    bottomInset: isFullscreen ? insets.bottom : 0,
+    onPlayPause,
+    onSkipBack,
+    onSkipForward,
+    onScrubStart,
+    onScrubChange,
+    onScrubComplete,
+    onVolumeChange,
+    onToggleFullscreen: toggleFullscreen,
+  };
 
   return (
     <View style={[styles.root, isFullscreen && styles.rootFullscreen]}>
       <StatusBar hidden={isFullscreen} />
 
-      {isFullscreen ? (
-        <Pressable
-          accessibilityLabel="Exit fullscreen"
-          accessibilityRole="button"
-          onPress={exitFullscreen}
-          style={({pressed}) => [
-            styles.exitFullscreenButton,
-            {top: insets.top + 8},
-            pressed && styles.pressed,
-          ]}>
-          <Text style={styles.exitFullscreenButtonText}>✕</Text>
-        </Pressable>
-      ) : null}
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          isFullscreen && {
-            minHeight: height - insets.top - insets.bottom,
-            paddingBottom: Math.max(insets.bottom, 8),
-          },
-          !isFullscreen && {
-            paddingBottom: Math.max(insets.bottom, 12),
-          },
-          isLandscape && !isFullscreen && styles.scrollContentLandscape,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={!isFullscreen}
-        showsVerticalScrollIndicator={!isFullscreen}>
+      <View
+        style={[
+          styles.videoHost,
+          isFullscreen
+            ? styles.videoHostFullscreen
+            : [
+                styles.videoHostInline,
+                {left: isLandscape ? 12 : HORIZONTAL_PADDING},
+              ],
+        ]}>
         <View
           style={[
-            styles.playerLayout,
-            isLandscape && !isFullscreen && styles.playerLayoutLandscape,
-            isFullscreen && styles.playerLayoutFullscreen,
+            styles.videoStage,
+            isFullscreen
+              ? styles.videoStageFullscreen
+              : {
+                  width: stageSize.width,
+                  height: stageSize.height,
+                },
+            !isFullscreen && styles.videoStageRounded,
           ]}>
+          <Video
+            ref={videoRef}
+            source={{uri: videoUri}}
+            style={[
+              styles.videoElement,
+              {
+                left: videoFrame.left,
+                top: videoFrame.top,
+                width: videoFrame.width,
+                height: videoFrame.height,
+              },
+            ]}
+            resizeMode="contain"
+            paused={paused}
+            volume={1}
+            controls={false}
+            progressUpdateInterval={100}
+            onLoad={handleVideoLoad}
+            onProgress={onVideoProgress}
+            onSeek={onVideoSeek}
+          />
+
+          <Pressable
+            accessibilityLabel={showControls ? 'Hide controls' : 'Show controls'}
+            accessibilityRole="button"
+            onPress={toggleControls}
+            style={styles.tapLayer}
+          />
+
+          <Animated.View
+            pointerEvents={showControls ? 'box-none' : 'none'}
+            style={[styles.controlsWrap, {opacity: controlsOpacity}]}>
+            <VideoControls {...controlProps} />
+          </Animated.View>
+
+          {skipNotice ? (
+            <View style={styles.skipNotice} pointerEvents="none">
+              <Text style={styles.skipNoticeText}>{skipNotice}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {isFullscreen ? (
+        <Animated.View
+          pointerEvents={showControls ? 'auto' : 'none'}
+          style={[styles.exitButtonWrap, {opacity: controlsOpacity}]}>
+          <Pressable
+            accessibilityLabel="Exit fullscreen"
+            accessibilityRole="button"
+            onPress={exitFullscreen}
+            style={({pressed}) => [
+              styles.exitFullscreenButton,
+              {top: insets.top + 8},
+              pressed && styles.pressed,
+            ]}>
+            <Text style={styles.exitFullscreenButtonText}>✕</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
+      {!isFullscreen ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {paddingBottom: Math.max(insets.bottom, 12)},
+            isLandscape && styles.scrollContentLandscape,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator>
           <View
             style={[
-              styles.videoWrapper,
-              isLandscape && !isFullscreen && styles.videoWrapperLandscape,
-              isFullscreen && styles.videoWrapperFullscreen,
+              styles.playerLayout,
+              isLandscape && styles.playerLayoutLandscape,
             ]}>
-            <Video
-              ref={videoRef}
-              source={{uri: videoUri}}
+            <View
               style={[
-                styles.video,
-                isLandscape && !isFullscreen && styles.videoLandscape,
-                isFullscreen && styles.videoFullscreen,
+                styles.inlineVideoSpacer,
+                {
+                  width: inlineStageSize.width,
+                  height: inlineStageSize.height,
+                },
               ]}
-              resizeMode="contain"
-              paused={paused}
-              volume={volume}
-              controls={false}
-              progressUpdateInterval={100}
-              onLoad={onVideoLoad}
-              onProgress={onVideoProgress}
-              onSeek={onVideoSeek}
             />
 
-            {skipNotice ? (
-              <View style={styles.skipNotice}>
-                <Text style={styles.skipNoticeText}>{skipNotice}</Text>
-              </View>
-            ) : null}
-
-            {!isFullscreen ? (
-              <Pressable
-                accessibilityLabel="Enter fullscreen"
-                accessibilityRole="button"
-                onPress={toggleFullscreen}
-                style={({pressed}) => [
-                  styles.fullscreenOverlayButton,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={styles.fullscreenOverlayButtonText}>⛶</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <View
-            style={[
-              styles.sideColumn,
-              isLandscape && !isFullscreen && styles.sideColumnLandscape,
-              isFullscreen && styles.sideColumnFullscreen,
-            ]}>
-            <VideoControls
-              paused={paused}
-              currentTime={currentTime}
-              duration={duration}
-              isScrubbing={isScrubbing}
-              scrubTime={scrubTime}
-              volume={volume}
-              isFullscreen={isFullscreen}
-              onPlayPause={onPlayPause}
-              onSkipBack={onSkipBack}
-              onSkipForward={onSkipForward}
-              onScrubStart={onScrubStart}
-              onScrubChange={onScrubChange}
-              onScrubComplete={onScrubComplete}
-              onVolumeChange={onVolumeChange}
-              onToggleFullscreen={toggleFullscreen}
-            />
-
-            {!isFullscreen ? (
+            <View
+              style={[
+                styles.sideColumn,
+                isLandscape && styles.sideColumnLandscape,
+              ]}>
               <View style={styles.infoPanel}>
                 <Text style={styles.contentTypeBadge}>
                   {contentType === 'episode' ? 'Web series' : 'Movie'}
@@ -230,10 +332,10 @@ export function VideoPlayerPanel({
                   </Text>
                 </Pressable>
               </View>
-            ) : null}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -245,13 +347,23 @@ const styles = StyleSheet.create({
   rootFullscreen: {
     backgroundColor: '#000000',
   },
+  videoHost: {
+    zIndex: 2,
+  },
+  videoHostInline: {
+    position: 'absolute',
+    top: 12,
+  },
+  videoHostFullscreen: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 10,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: HORIZONTAL_PADDING,
   },
   scrollContentLandscape: {
     paddingHorizontal: 12,
@@ -264,11 +376,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  playerLayoutFullscreen: {
-    flex: 1,
-    flexDirection: 'column',
-    gap: 8,
-    justifyContent: 'space-between',
+  inlineVideoSpacer: {
+    flexShrink: 0,
+  },
+  videoStage: {
+    backgroundColor: '#000000',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  videoStageFullscreen: {
+    ...StyleSheet.absoluteFill,
+  },
+  videoStageRounded: {
+    borderRadius: 12,
+  },
+  videoElement: {
+    position: 'absolute',
+  },
+  tapLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
+  },
+  controlsWrap: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 3,
+  },
+  exitButtonWrap: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 11,
   },
   sideColumn: {
     gap: 12,
@@ -276,53 +413,6 @@ const styles = StyleSheet.create({
   sideColumnLandscape: {
     flex: 1,
     minWidth: 280,
-  },
-  sideColumnFullscreen: {
-    flexGrow: 0,
-  },
-  videoWrapper: {
-    position: 'relative',
-  },
-  videoWrapperLandscape: {
-    flex: 1.4,
-    minWidth: 0,
-  },
-  videoWrapperFullscreen: {
-    flex: 1,
-  },
-  video: {
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  videoLandscape: {
-    aspectRatio: undefined,
-    height: 220,
-  },
-  videoFullscreen: {
-    aspectRatio: undefined,
-    borderRadius: 0,
-    flex: 1,
-    height: undefined,
-    width: '100%',
-  },
-  fullscreenOverlayButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    borderRadius: 8,
-    bottom: 10,
-    height: 36,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 10,
-    width: 36,
-  },
-  fullscreenOverlayButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
   },
   skipNotice: {
     backgroundColor: 'rgba(59, 130, 246, 0.92)',
@@ -333,6 +423,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     top: 12,
+    zIndex: 4,
   },
   skipNoticeText: {
     color: '#ffffff',
@@ -342,19 +433,16 @@ const styles = StyleSheet.create({
   },
   exitFullscreenButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 18,
-    height: 36,
+    height: 40,
     justifyContent: 'center',
     position: 'absolute',
     right: 16,
-    width: 36,
-    zIndex: 10,
+    width: 40,
   },
   exitFullscreenButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '400',
   },
   infoPanel: {
     backgroundColor: '#1a1f27',

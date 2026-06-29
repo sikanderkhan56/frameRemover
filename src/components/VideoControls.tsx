@@ -1,6 +1,7 @@
 import Slider from '@react-native-community/slider';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {formatTimestamp} from '../utils/frameSkip';
+import {VolumeControl} from './VolumeControl';
 
 const SKIP_SECONDS = 5;
 
@@ -12,6 +13,7 @@ type VideoControlsProps = {
   scrubTime: number;
   volume: number;
   isFullscreen: boolean;
+  bottomInset?: number;
   onPlayPause: () => void;
   onSkipBack: () => void;
   onSkipForward: () => void;
@@ -22,18 +24,6 @@ type VideoControlsProps = {
   onToggleFullscreen: () => void;
 };
 
-function volumeIcon(level: number): string {
-  if (level === 0) {
-    return '🔇';
-  }
-
-  if (level < 0.5) {
-    return '🔉';
-  }
-
-  return '🔊';
-}
-
 export function VideoControls({
   paused,
   currentTime,
@@ -42,6 +32,7 @@ export function VideoControls({
   scrubTime,
   volume,
   isFullscreen,
+  bottomInset = 0,
   onPlayPause,
   onSkipBack,
   onSkipForward,
@@ -55,49 +46,22 @@ export function VideoControls({
   const sliderValue = duration > 0 ? displayTime / duration : 0;
 
   return (
-    <View style={[styles.container, isFullscreen && styles.containerFullscreen]}>
-      <Slider
-        style={styles.slider}
-        minimumValue={0}
-        maximumValue={1}
-        value={sliderValue}
-        minimumTrackTintColor="#3b82f6"
-        maximumTrackTintColor="#3a3f4b"
-        thumbTintColor="#ffffff"
-        onSlidingStart={onScrubStart}
-        onValueChange={value => onScrubChange(value * duration)}
-        onSlidingComplete={value => onScrubComplete(value * duration)}
-      />
+    <View
+      style={[styles.root, {paddingBottom: Math.max(bottomInset, 8)}]}
+      pointerEvents="box-none">
+      <View style={styles.scrim} pointerEvents="none" />
 
-      <View style={styles.timeRow}>
-        <Text style={styles.timeText}>
-          {formatTimestamp(displayTime)} / {formatTimestamp(duration)}
-        </Text>
-      </View>
-
-      <View style={styles.volumeRow}>
-        <Text style={styles.volumeIcon}>{volumeIcon(volume)}</Text>
-        <Slider
-          accessibilityLabel="Volume"
-          style={styles.volumeSlider}
-          minimumValue={0}
-          maximumValue={1}
-          value={volume}
-          minimumTrackTintColor="#93c5fd"
-          maximumTrackTintColor="#3a3f4b"
-          thumbTintColor="#ffffff"
-          onValueChange={onVolumeChange}
-        />
-        <Text style={styles.volumeLabel}>{Math.round(volume * 100)}%</Text>
-      </View>
-
-      <View style={styles.buttonsRow}>
+      <View style={styles.centerRow} pointerEvents="box-none">
         <Pressable
           accessibilityLabel={`Rewind ${SKIP_SECONDS} seconds`}
           accessibilityRole="button"
           onPress={onSkipBack}
-          style={({pressed}) => [styles.controlButton, pressed && styles.pressed]}>
-          <Text style={styles.controlButtonText}>-{SKIP_SECONDS}s</Text>
+          style={({pressed}) => [
+            styles.centerButton,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
+          <Text style={styles.skipLabel}>sec</Text>
         </Pressable>
 
         <Pressable
@@ -115,20 +79,48 @@ export function VideoControls({
           accessibilityLabel={`Forward ${SKIP_SECONDS} seconds`}
           accessibilityRole="button"
           onPress={onSkipForward}
-          style={({pressed}) => [styles.controlButton, pressed && styles.pressed]}>
-          <Text style={styles.controlButtonText}>+{SKIP_SECONDS}s</Text>
+          style={({pressed}) => [
+            styles.centerButton,
+            pressed && styles.pressed,
+          ]}>
+          <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
+          <Text style={styles.skipLabel}>sec</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.bottomBar} pointerEvents="box-none">
+        <VolumeControl volume={volume} onVolumeChange={onVolumeChange} />
+
+        <View style={styles.progressColumn}>
+          <Slider
+            style={styles.progressSlider}
+            minimumValue={0}
+            maximumValue={1}
+            value={sliderValue}
+            minimumTrackTintColor="#ff0000"
+            maximumTrackTintColor="rgba(255,255,255,0.35)"
+            thumbTintColor="#ffffff"
+            onSlidingStart={onScrubStart}
+            onValueChange={value => onScrubChange(value * duration)}
+            onSlidingComplete={value => onScrubComplete(value * duration)}
+          />
+          <Text style={styles.timeText}>
+            {formatTimestamp(displayTime)} / {formatTimestamp(duration)}
+          </Text>
+        </View>
 
         <Pressable
-          accessibilityLabel={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          accessibilityLabel={
+            isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
+          }
           accessibilityRole="button"
           onPress={onToggleFullscreen}
           style={({pressed}) => [
-            styles.controlButton,
+            styles.cornerButton,
             pressed && styles.pressed,
           ]}>
-          <Text style={styles.controlButtonText}>
-            {isFullscreen ? 'Exit' : 'Full'}
+          <Text style={styles.fullscreenIcon}>
+            {isFullscreen ? '⤡' : '⤢'}
           </Text>
         </Pressable>
       </View>
@@ -139,86 +131,90 @@ export function VideoControls({
 export const PLAYER_SKIP_SECONDS = SKIP_SECONDS;
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#1a1f27',
-    borderRadius: 12,
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  root: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'space-between',
+    zIndex: 3,
   },
-  containerFullscreen: {
-    backgroundColor: 'rgba(26, 31, 39, 0.92)',
-    borderRadius: 0,
+  scrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
-  slider: {
-    height: 40,
-    width: '100%',
-  },
-  timeRow: {
+  centerRow: {
     alignItems: 'center',
-  },
-  timeText: {
-    color: '#d1d5db',
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-  },
-  volumeRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 2,
-  },
-  volumeIcon: {
-    fontSize: 16,
-    width: 24,
-  },
-  volumeSlider: {
     flex: 1,
-    height: 36,
-  },
-  volumeLabel: {
-    color: '#9ca3af',
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
-    width: 36,
-  },
-  buttonsRow: {
-    alignItems: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 28,
     justifyContent: 'center',
-    gap: 12,
-    marginTop: 4,
   },
-  controlButton: {
+  centerButton: {
     alignItems: 'center',
-    borderColor: '#3a3f4b',
-    borderRadius: 8,
-    borderWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 36,
+    height: 72,
     justifyContent: 'center',
-    minWidth: 56,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    width: 72,
   },
-  controlButtonText: {
-    color: '#e5e7eb',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  playButton: {
-    alignItems: 'center',
-    backgroundColor: '#3b82f6',
-    borderRadius: 28,
-    height: 56,
-    justifyContent: 'center',
-    width: 56,
-  },
-  playButtonText: {
+  skipText: {
     color: '#ffffff',
     fontSize: 20,
     fontWeight: '700',
   },
+  skipLabel: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -2,
+  },
+  playButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 40,
+    height: 80,
+    justifyContent: 'center',
+    width: 80,
+  },
+  playButtonText: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  bottomBar: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 8,
+  },
+  progressColumn: {
+    flex: 1,
+    gap: 2,
+    justifyContent: 'flex-end',
+    minWidth: 0,
+    paddingBottom: 4,
+  },
+  progressSlider: {
+    height: 10,
+    marginHorizontal: -6,
+    width: '100%',
+  },
+  timeText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  cornerButton: {
+    alignItems: 'center',
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  fullscreenIcon: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '600',
+  },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.75,
   },
 });

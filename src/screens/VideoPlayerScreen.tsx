@@ -27,6 +27,7 @@ import {VideoPlayerPanel} from '../components/VideoPlayerPanel';
 import {PLAYER_SKIP_SECONDS} from '../components/VideoControls';
 import {SKIP_LEAD_TIME_SECONDS} from '../constants/playback';
 import {useFrameSkipper} from '../hooks/useFrameSkipper';
+import {useSystemVolume} from '../hooks/useSystemVolume';
 import {
   useCreateEpisodeMutation,
   useCreateMovieMutation,
@@ -87,7 +88,7 @@ export function VideoPlayerScreen() {
   const [cutSceneError, setCutSceneError] = useState<string | null>(null);
 
   const [paused, setPaused] = useState(false);
-  const [volume, setVolume] = useState(1);
+  const {volume, setVolume} = useSystemVolume();
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
@@ -178,7 +179,6 @@ export function VideoPlayerScreen() {
     setErrorMessage(null);
     setCutSceneError(null);
     setPaused(false);
-    setVolume(1);
     setDuration(0);
     setCurrentTime(0);
     setSkipNotice(null);
@@ -677,7 +677,9 @@ export function VideoPlayerScreen() {
     <View
       style={[
         styles.container,
-        {paddingTop: insets.top, paddingBottom: insets.bottom},
+        step === 'playing'
+          ? styles.containerPlaying
+          : {paddingTop: insets.top, paddingBottom: insets.bottom},
       ]}>
       {videoUri && isSetupStep ? (
         <Video
@@ -1105,8 +1107,11 @@ export function VideoPlayerScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: '#0f1115',
+    flex: 1,
+  },
+  containerPlaying: {
+    backgroundColor: '#000000',
   },
   hiddenVideo: {
     height: 0,
