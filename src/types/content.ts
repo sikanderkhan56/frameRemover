@@ -44,6 +44,18 @@ export type SearchMovieParams = {
   release_year: number;
 };
 
+export type MovieSuggestionParams = {
+  query: string;
+  limit?: number;
+};
+
+export type MovieSuggestion = {
+  movie_id: string;
+  title: string;
+  release_year: number;
+  scene_count: number;
+};
+
 export type MovieExistsResponse =
   | {
       exists: true;

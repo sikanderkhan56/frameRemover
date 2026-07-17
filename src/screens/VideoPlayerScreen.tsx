@@ -34,10 +34,15 @@ import {
   useLazyCheckMovieExistsQuery,
   useLazyGetEpisodeByIdQuery,
   useLazyGetMovieByIdQuery,
+  useLazyGetMovieSuggestionsQuery,
   useUpdateEpisodeMutation,
   useUpdateMovieMutation,
 } from '../store/api/contentApi';
-import type {ContentType, CutScene} from '../types/content';
+import type {
+  ContentType,
+  CutScene,
+  MovieSuggestion,
+} from '../types/content';
 import {
   createEmptyCutSceneDraft,
   type SceneEditMode,
@@ -75,6 +80,13 @@ export function VideoPlayerScreen() {
 
   const [movieTitle, setMovieTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
+  const [movieSuggestions, setMovieSuggestions] = useState<MovieSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [hasLoadedSuggestions, setHasLoadedSuggestions] = useState(false);
+  const [selectedMovieSuggestionId, setSelectedMovieSuggestionId] = useState<
+    string | null
+  >(null);
+  const suggestionRequestIdRef = useRef(0);
 
   const [seriesTitle, setSeriesTitle] = useState('');
   const [seasonNumber, setSeasonNumber] = useState('');
@@ -105,6 +117,7 @@ export function VideoPlayerScreen() {
   const [checkEpisodeExists] = useLazyCheckEpisodeExistsQuery();
   const [getMovieById] = useLazyGetMovieByIdQuery();
   const [getEpisodeById] = useLazyGetEpisodeByIdQuery();
+  const [getMovieSuggestions] = useLazyGetMovieSuggestionsQuery();
   const [createMovie, {isLoading: isCreatingMovie}] = useCreateMovieMutation();
   const [updateMovie, {isLoading: isUpdatingMovie}] = useUpdateMovieMutation();
   const [createEpisode, {isLoading: isCreatingEpisode}] =
@@ -134,6 +147,57 @@ export function VideoPlayerScreen() {
     const episode = Number(episodeNumber.trim());
     return Number.isInteger(episode) ? episode : null;
   }, [episodeNumber]);
+
+  useEffect(() => {
+    const query = movieTitle.trim();
+    const requestId = ++suggestionRequestIdRef.current;
+
+    if (
+      step !== 'identify' ||
+      contentType !== 'movie' ||
+      query.length < 2 ||
+      selectedMovieSuggestionId
+    ) {
+      setMovieSuggestions([]);
+      setIsLoadingSuggestions(false);
+      setHasLoadedSuggestions(false);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    setHasLoadedSuggestions(false);
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await getMovieSuggestions({
+          query,
+          limit: 10,
+        }).unwrap();
+
+        if (suggestionRequestIdRef.current === requestId) {
+          setMovieSuggestions(results);
+          setHasLoadedSuggestions(true);
+        }
+      } catch {
+        if (suggestionRequestIdRef.current === requestId) {
+          setMovieSuggestions([]);
+          setHasLoadedSuggestions(false);
+        }
+      } finally {
+        if (suggestionRequestIdRef.current === requestId) {
+          setIsLoadingSuggestions(false);
+        }
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [
+    contentType,
+    getMovieSuggestions,
+    movieTitle,
+    selectedMovieSuggestionId,
+    step,
+  ]);
 
   const showSkipNotice = useCallback(
     (interval: {label?: string; start: number; end: number}) => {
@@ -173,6 +237,10 @@ export function VideoPlayerScreen() {
     setVideoFileName('');
     setMovieTitle('');
     setReleaseYear('');
+    setMovieSuggestions([]);
+    setIsLoadingSuggestions(false);
+    setHasLoadedSuggestions(false);
+    setSelectedMovieSuggestionId(null);
     setSeriesTitle('');
     setSeasonNumber('');
     setEpisodeNumber('');
@@ -247,6 +315,10 @@ export function VideoPlayerScreen() {
       setSceneEditMode('create');
       setMovieTitle('');
       setReleaseYear('');
+      setMovieSuggestions([]);
+      setIsLoadingSuggestions(false);
+      setHasLoadedSuggestions(false);
+      setSelectedMovieSuggestionId(null);
       setSeriesTitle('');
       setSeasonNumber('');
       setEpisodeNumber('');
@@ -280,6 +352,62 @@ export function VideoPlayerScreen() {
   const handleProbeLoad = useCallback((data: PlayerLoadData) => {
     setVideoDuration(data.duration);
   }, []);
+
+  const handleMovieTitleChange = useCallback((title: string) => {
+    setMovieTitle(title);
+    setSelectedMovieSuggestionId(null);
+    setContentId('');
+    setMovieSuggestions([]);
+    setHasLoadedSuggestions(false);
+    setErrorMessage(null);
+  }, []);
+
+  const handleReleaseYearChange = useCallback((year: string) => {
+    setReleaseYear(year);
+    setSelectedMovieSuggestionId(null);
+    setContentId('');
+    setErrorMessage(null);
+  }, []);
+
+  const handleSelectMovieSuggestion = useCallback(
+    async (suggestion: MovieSuggestion) => {
+      setErrorMessage(null);
+      setSelectedMovieSuggestionId(suggestion.movie_id);
+      setMovieTitle(suggestion.title);
+      setReleaseYear(String(suggestion.release_year));
+      setMovieSuggestions([]);
+      setHasLoadedSuggestions(false);
+      setContentId(suggestion.movie_id);
+      setContentLabel(`${suggestion.title} (${suggestion.release_year})`);
+      setExistingSceneCount(suggestion.scene_count);
+      setStep('checking');
+
+      try {
+        const movie = await getMovieById(suggestion.movie_id).unwrap();
+        setContentId(movie.movie_id);
+        setContentLabel(`${movie.title} (${movie.release_year})`);
+        setCutScenes(movie.cut_scenes);
+        setExistingSceneCount(suggestion.scene_count);
+        setStep('already_exists');
+      } catch (error) {
+        setSelectedMovieSuggestionId(null);
+        setContentId('');
+        setStep('identify');
+
+        if (isFetchBaseQueryError(error) && error.status === 'FETCH_ERROR') {
+          setErrorMessage(
+            'Cannot reach the API. Check that the backend is running.',
+          );
+        } else {
+          setErrorMessage(
+            getApiErrorDetail(error) ??
+              'Could not load this movie. Please try again.',
+          );
+        }
+      }
+    },
+    [getMovieById],
+  );
 
   const loadFullContent = useCallback(async () => {
     if (!contentType || !contentId) {
@@ -857,28 +985,83 @@ export function VideoPlayerScreen() {
             <>
               <Text style={styles.title}>Movie details</Text>
               <Text style={styles.subtitle}>
-                Enter the movie title and release year so we can find the right
-                version (remakes share names but differ by year).
+                Start typing a movie title, then select the correct release from
+                the suggestions.
               </Text>
 
               <Text style={styles.fieldLabel}>Movie title</Text>
-              <TextInput
-                accessibilityLabel="Movie title"
-                autoCapitalize="words"
-                autoCorrect={false}
-                onChangeText={setMovieTitle}
-                placeholder="e.g. Inception"
-                placeholderTextColor="#6b7280"
-                style={styles.input}
-                value={movieTitle}
-              />
+              <View style={styles.movieSearchField}>
+                <TextInput
+                  accessibilityLabel="Movie title"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  onChangeText={handleMovieTitleChange}
+                  placeholder="e.g. Inception"
+                  placeholderTextColor="#6b7280"
+                  style={styles.input}
+                  value={movieTitle}
+                />
+
+                {!selectedMovieSuggestionId &&
+                movieTitle.trim().length >= 2 &&
+                (isLoadingSuggestions ||
+                  hasLoadedSuggestions ||
+                  movieSuggestions.length > 0) ? (
+                  <View style={styles.suggestionList}>
+                    {isLoadingSuggestions ? (
+                      <View style={styles.suggestionStatus}>
+                        <ActivityIndicator color="#93c5fd" size="small" />
+                        <Text style={styles.suggestionStatusText}>
+                          Searching…
+                        </Text>
+                      </View>
+                    ) : movieSuggestions.length > 0 ? (
+                      movieSuggestions.map((suggestion, index) => (
+                        <Pressable
+                          accessibilityLabel={`${suggestion.title}, ${suggestion.release_year}`}
+                          accessibilityRole="button"
+                          key={suggestion.movie_id}
+                          onPress={() =>
+                            void handleSelectMovieSuggestion(suggestion)
+                          }
+                          style={({pressed}) => [
+                            styles.suggestionRow,
+                            index > 0 && styles.suggestionRowBorder,
+                            pressed && styles.suggestionRowPressed,
+                          ]}>
+                          <View style={styles.suggestionText}>
+                            <Text
+                              numberOfLines={1}
+                              style={styles.suggestionTitle}>
+                              {suggestion.title}
+                            </Text>
+                            <Text style={styles.suggestionYear}>
+                              {suggestion.release_year}
+                            </Text>
+                          </View>
+                          <Text style={styles.suggestionSceneCount}>
+                            {suggestion.scene_count}{' '}
+                            {suggestion.scene_count === 1 ? 'scene' : 'scenes'}
+                          </Text>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <View style={styles.suggestionStatus}>
+                        <Text style={styles.suggestionStatusText}>
+                          No matching movies
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+              </View>
 
               <Text style={styles.fieldLabel}>Release year</Text>
               <TextInput
                 accessibilityLabel="Release year"
                 keyboardType="number-pad"
                 maxLength={4}
-                onChangeText={setReleaseYear}
+                onChangeText={handleReleaseYearChange}
                 placeholder="e.g. 2010"
                 placeholderTextColor="#6b7280"
                 style={styles.input}
@@ -1212,6 +1395,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  movieSearchField: {
+    zIndex: 2,
+  },
+  suggestionList: {
+    backgroundColor: '#1a1f27',
+    borderColor: '#3a3f4b',
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 54,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  suggestionRowBorder: {
+    borderTopColor: '#303642',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionRowPressed: {
+    backgroundColor: '#252c37',
+  },
+  suggestionText: {
+    flex: 1,
+    gap: 2,
+  },
+  suggestionTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  suggestionYear: {
+    color: '#9ca3af',
+    fontSize: 13,
+  },
+  suggestionSceneCount: {
+    color: '#93c5fd',
+    fontSize: 12,
+  },
+  suggestionStatus: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 14,
+  },
+  suggestionStatusText: {
+    color: '#9ca3af',
+    fontSize: 14,
   },
   rowInputs: {
     flexDirection: 'row',

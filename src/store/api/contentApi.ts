@@ -8,6 +8,8 @@ import type {
   EpisodeResponse,
   MovieExistsResponse,
   MovieResponse,
+  MovieSuggestion,
+  MovieSuggestionParams,
   SearchEpisodeParams,
   SearchMovieParams,
   UpdateEpisodeRequest,
@@ -38,6 +40,15 @@ export const contentApi = createApi({
       }),
       providesTags: result =>
         result ? [{type: 'Movie', id: result.movie_id}] : [],
+    }),
+    getMovieSuggestions: builder.query<
+      MovieSuggestion[],
+      MovieSuggestionParams
+    >({
+      query: ({query, limit = 10}) => ({
+        url: '/api/movie/suggestions',
+        params: {query, limit: Math.min(limit, 20)},
+      }),
     }),
     getMovieById: builder.query<MovieResponse, string>({
       query: movieId => `/api/movie/${encodeURIComponent(movieId)}`,
@@ -145,6 +156,7 @@ export const {
   useLazyCheckEpisodeExistsQuery,
   useLazySearchMovieQuery,
   useLazySearchEpisodeQuery,
+  useLazyGetMovieSuggestionsQuery,
   useLazyGetMovieByIdQuery,
   useLazyGetEpisodeByIdQuery,
   useCreateMovieMutation,
