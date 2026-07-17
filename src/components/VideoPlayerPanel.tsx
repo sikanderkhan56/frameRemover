@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useTvRemote} from '../hooks/useTvRemote';
 import type {ContentType} from '../types/content';
 import type {
   PlayerLoadData,
@@ -146,6 +147,19 @@ export function VideoPlayerPanel({
   const toggleControls = useCallback(() => {
     setShowControls(value => !value);
   }, []);
+
+  const revealControls = useCallback(() => {
+    setShowControls(true);
+  }, []);
+
+  // Android TV remote / hardware keyboard: D-pad left/right seek ±5s,
+  // center / play-pause toggles playback, and any key surfaces the controls.
+  useTvRemote({
+    onSkipForward,
+    onSkipBack,
+    onPlayPause,
+    onAnyKey: revealControls,
+  });
 
   const animateStageTransition = useCallback(() => {
     LayoutAnimation.configureNext({
