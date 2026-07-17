@@ -1,9 +1,10 @@
 import Slider from '@react-native-community/slider';
-import {Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {formatTimestamp} from '../utils/frameSkip';
 import {VolumeControl} from './VolumeControl';
 
 const SKIP_SECONDS = 5;
+const SLIDER_THUMB = require('../assets/slider-thumb.png');
 
 type VideoControlsProps = {
   paused: boolean;
@@ -13,6 +14,7 @@ type VideoControlsProps = {
   scrubTime: number;
   volume: number;
   isFullscreen: boolean;
+  isFillMode: boolean;
   bottomInset?: number;
   onPlayPause: () => void;
   onSkipBack: () => void;
@@ -21,6 +23,7 @@ type VideoControlsProps = {
   onScrubChange: (value: number) => void;
   onScrubComplete: (value: number) => void;
   onVolumeChange: (value: number) => void;
+  onToggleAspectRatio: () => void;
   onToggleFullscreen: () => void;
 };
 
@@ -32,6 +35,7 @@ export function VideoControls({
   scrubTime,
   volume,
   isFullscreen,
+  isFillMode,
   bottomInset = 0,
   onPlayPause,
   onSkipBack,
@@ -40,12 +44,15 @@ export function VideoControls({
   onScrubChange,
   onScrubComplete,
   onVolumeChange,
+  onToggleAspectRatio,
   onToggleFullscreen,
 }: VideoControlsProps) {
-  const {width, height} = useWindowDimensions();
-  const useLargeCenterControls = isFullscreen && width > height;
   const displayTime = isScrubbing ? scrubTime : currentTime;
-  const sliderValue = duration > 0 ? displayTime / duration : 0;
+  const sliderValue =
+    duration > 0 && Number.isFinite(displayTime)
+      ? Math.max(0, Math.min(1, displayTime / duration))
+      : 0;
+  const progressWidth = `${sliderValue * 100}%` as `${number}%`;
 
   return (
     <View
@@ -53,90 +60,58 @@ export function VideoControls({
       pointerEvents="box-none">
       <View style={styles.scrim} pointerEvents="none" />
 
-      <View
-        style={[
-          styles.centerRow,
-          !useLargeCenterControls && styles.centerRowCompact,
-        ]}
-        pointerEvents="box-none">
-        <Pressable
-          accessibilityLabel={`Rewind ${SKIP_SECONDS} seconds`}
-          accessibilityRole="button"
-          onPress={onSkipBack}
-          style={({pressed}) => [
-            styles.centerButton,
-            !useLargeCenterControls && styles.centerButtonCompact,
-            pressed && styles.pressed,
-          ]}>
-          <Text
-            style={[
-              styles.skipText,
-              !useLargeCenterControls && styles.skipTextCompact,
+      <View style={styles.centerArea} pointerEvents="box-none">
+        <View style={styles.centerRow} pointerEvents="box-none">
+          <Pressable
+            accessibilityLabel={`Rewind ${SKIP_SECONDS} seconds`}
+            accessibilityRole="button"
+            onPress={onSkipBack}
+            style={({pressed}) => [
+              styles.centerButton,
+              pressed && styles.pressed,
             ]}>
-            {SKIP_SECONDS}
-          </Text>
-          <Text
-            style={[
-              styles.skipLabel,
-              !useLargeCenterControls && styles.skipLabelCompact,
-            ]}>
-            sec
-          </Text>
-        </Pressable>
+            <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
+            <Text style={styles.skipLabel}>sec</Text>
+          </Pressable>
 
-        <Pressable
-          accessibilityLabel={paused ? 'Play' : 'Pause'}
-          accessibilityRole="button"
-          onPress={onPlayPause}
-          style={({pressed}) => [
-            styles.playButton,
-            !useLargeCenterControls && styles.playButtonCompact,
-            pressed && styles.pressed,
-          ]}>
-          <Text
-            style={[
-              styles.playButtonText,
-              !useLargeCenterControls && styles.playButtonTextCompact,
+          <Pressable
+            accessibilityLabel={paused ? 'Play' : 'Pause'}
+            accessibilityRole="button"
+            onPress={onPlayPause}
+            style={({pressed}) => [
+              styles.playButton,
+              pressed && styles.pressed,
             ]}>
-            {paused ? '▶' : '❚❚'}
-          </Text>
-        </Pressable>
+            <Text style={styles.playButtonText}>{paused ? '▶' : '❚❚'}</Text>
+          </Pressable>
 
-        <Pressable
-          accessibilityLabel={`Forward ${SKIP_SECONDS} seconds`}
-          accessibilityRole="button"
-          onPress={onSkipForward}
-          style={({pressed}) => [
-            styles.centerButton,
-            !useLargeCenterControls && styles.centerButtonCompact,
-            pressed && styles.pressed,
-          ]}>
-          <Text
-            style={[
-              styles.skipText,
-              !useLargeCenterControls && styles.skipTextCompact,
+          <Pressable
+            accessibilityLabel={`Forward ${SKIP_SECONDS} seconds`}
+            accessibilityRole="button"
+            onPress={onSkipForward}
+            style={({pressed}) => [
+              styles.centerButton,
+              pressed && styles.pressed,
             ]}>
-            {SKIP_SECONDS}
-          </Text>
-          <Text
-            style={[
-              styles.skipLabel,
-              !useLargeCenterControls && styles.skipLabelCompact,
-            ]}>
-            sec
-          </Text>
-        </Pressable>
+            <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
+            <Text style={styles.skipLabel}>sec</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.bottomArea} pointerEvents="box-none">
         <View style={styles.progressRow}>
+          <View style={styles.progressTrack} pointerEvents="none">
+            <View style={[styles.progressFill, {width: progressWidth}]} />
+          </View>
           <Slider
             style={styles.progressSlider}
             minimumValue={0}
             maximumValue={1}
             value={sliderValue}
-            minimumTrackTintColor="#ff0000"
-            maximumTrackTintColor="rgba(255,255,255,0.35)"
+            minimumTrackTintColor="transparent"
+            maximumTrackTintColor="transparent"
+            thumbImage={SLIDER_THUMB}
             thumbTintColor="#ffffff"
             onSlidingStart={onScrubStart}
             onValueChange={value => onScrubChange(value * duration)}
@@ -147,26 +122,41 @@ export function VideoControls({
         <View style={styles.bottomRow}>
           <VolumeControl volume={volume} onVolumeChange={onVolumeChange} />
 
-          <Text style={styles.timeText}>
+          <Text style={styles.timeText} numberOfLines={1}>
             {formatTimestamp(displayTime)} / {formatTimestamp(duration)}
           </Text>
 
-          <View style={styles.bottomSpacer} />
+          <View style={styles.cornerButtonGroup}>
+            <Pressable
+              accessibilityLabel={
+                isFillMode ? 'Switch to fit mode' : 'Switch to fill mode'
+              }
+              accessibilityRole="button"
+              onPress={onToggleAspectRatio}
+              style={({pressed}) => [
+                styles.cornerButton,
+                pressed && styles.pressed,
+              ]}>
+              <Text style={styles.cornerButtonIcon}>
+                {isFillMode ? '▣' : '⇱'}
+              </Text>
+            </Pressable>
 
-          <Pressable
-            accessibilityLabel={
-              isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
-            }
-            accessibilityRole="button"
-            onPress={onToggleFullscreen}
-            style={({pressed}) => [
-              styles.cornerButton,
-              pressed && styles.pressed,
-            ]}>
-            <Text style={styles.fullscreenIcon}>
-              {isFullscreen ? '⤡' : '⤢'}
-            </Text>
-          </Pressable>
+            <Pressable
+              accessibilityLabel={
+                isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
+              }
+              accessibilityRole="button"
+              onPress={onToggleFullscreen}
+              style={({pressed}) => [
+                styles.cornerButton,
+                pressed && styles.pressed,
+              ]}>
+              <Text style={styles.cornerButtonIcon}>
+                {isFullscreen ? '⤡' : '⤢'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -178,43 +168,37 @@ export const PLAYER_SKIP_SECONDS = SKIP_SECONDS;
 const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFill,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     zIndex: 3,
   },
   scrim: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
-  centerRow: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: 28,
+  centerArea: {
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
   },
-  centerRowCompact: {
-    gap: 16,
+  centerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 24,
+    justifyContent: 'center',
   },
   centerButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    borderRadius: 36,
-    height: 72,
+    borderColor: 'rgba(229, 9, 20, 0.75)',
+    borderRadius: 25,
+    borderWidth: 1,
+    height: 50,
     justifyContent: 'center',
-    width: 72,
-  },
-  centerButtonCompact: {
-    borderRadius: 26,
-    height: 52,
-    width: 52,
+    width: 50,
   },
   skipText: {
     color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  skipTextCompact: {
     fontSize: 15,
+    fontWeight: '700',
   },
   skipLabel: {
     color: 'rgba(255,255,255,0.85)',
@@ -222,66 +206,80 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: -2,
   },
-  skipLabelCompact: {
-    fontSize: 9,
-  },
   playButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 40,
-    height: 80,
+    borderColor: '#e50914',
+    borderRadius: 25,
+    borderWidth: 1,
+    height: 50,
     justifyContent: 'center',
-    width: 80,
-  },
-  playButtonCompact: {
-    borderRadius: 29,
-    height: 58,
-    width: 58,
+    width: 50,
   },
   playButtonText: {
     color: '#ffffff',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  playButtonTextCompact: {
     fontSize: 20,
+    fontWeight: '700',
   },
   bottomArea: {
     gap: 2,
     width: '100%',
+    zIndex: 4,
   },
   progressRow: {
-    paddingHorizontal: 2,
+    height: 22,
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingHorizontal: 16,
     width: '100%',
   },
+  progressTrack: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    height: 3,
+    left: 16,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 16,
+  },
+  progressFill: {
+    backgroundColor: '#e50914',
+    height: 3,
+  },
   progressSlider: {
-    height: 10,
+    height: 22,
     width: '100%',
   },
   bottomRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 6,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
   },
-  bottomSpacer: {
-    flex: 1,
-  },
-  timeText: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 10,
-    fontVariant: ['tabular-nums'],
+  cornerButtonGroup: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    marginLeft: 'auto',
   },
   cornerButton: {
     alignItems: 'center',
-    height: 28,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 22,
+    height: 44,
     justifyContent: 'center',
-    width: 28,
+    width: 44,
   },
-  fullscreenIcon: {
+  cornerButtonIcon: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
+  },
+  timeText: {
+    color: 'rgba(255,255,255,0.9)',
+    flexShrink: 1,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
   },
   pressed: {
     opacity: 0.75,

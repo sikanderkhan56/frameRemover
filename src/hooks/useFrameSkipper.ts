@@ -1,5 +1,5 @@
 import {useCallback, useRef, type RefObject} from 'react';
-import type {OnProgressData, OnSeekData, VideoRef} from 'react-native-video';
+import type {PlayerProgressData, SeekablePlayerHandle} from '../types/player';
 import type {SkipInterval} from '../types/skipInterval';
 import {findActiveSkipInterval} from '../utils/frameSkip';
 
@@ -12,7 +12,7 @@ type UseFrameSkipperOptions = {
 };
 
 export function useFrameSkipper(
-  videoRef: RefObject<VideoRef | null>,
+  playerRef: RefObject<SeekablePlayerHandle | null>,
   {intervals, leadTimeSeconds = 0.25, onSkipped}: UseFrameSkipperOptions,
 ) {
   const isSeekingRef = useRef(false);
@@ -46,22 +46,22 @@ export function useFrameSkipper(
       }
 
       isSeekingRef.current = true;
-      videoRef.current?.seek(activeInterval.end);
+      playerRef.current?.seek(activeInterval.end);
       onSkipped?.(activeInterval);
       scheduleSeekReset();
     },
-    [intervals, leadTimeSeconds, onSkipped, scheduleSeekReset, videoRef],
+    [intervals, leadTimeSeconds, onSkipped, playerRef, scheduleSeekReset],
   );
 
   const handleProgress = useCallback(
-    (progress: OnProgressData) => {
+    (progress: PlayerProgressData) => {
       skipIfNeeded(progress.currentTime);
     },
     [skipIfNeeded],
   );
 
   const handleSeek = useCallback(
-    (seekEvent: OnSeekData) => {
+    (seekEvent: {currentTime: number}) => {
       isSeekingRef.current = false;
       clearSeekResetTimer();
       skipIfNeeded(seekEvent.currentTime);

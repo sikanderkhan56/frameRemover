@@ -12,20 +12,19 @@ import {
 import {
   errorCodes,
   isErrorWithCode,
+  keepLocalCopy,
   pick,
-  types,
 } from '@react-native-documents/picker';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Video, {
-  type OnLoadData,
-  type OnProgressData,
-  type OnSeekData,
-  type VideoRef,
-} from 'react-native-video';
 import {CutSceneEditor} from '../components/CutSceneEditor';
+import {AppVideoSurface} from '../components/AppVideoSurface';
 import {VideoPlayerPanel} from '../components/VideoPlayerPanel';
 import {PLAYER_SKIP_SECONDS} from '../components/VideoControls';
 import {SKIP_LEAD_TIME_SECONDS} from '../constants/playback';
+import {
+  getPlaybackSupportError,
+  VIDEO_PICK_TYPES,
+} from '../constants/videoPicker';
 import {useFrameSkipper} from '../hooks/useFrameSkipper';
 import {useSystemVolume} from '../hooks/useSystemVolume';
 import {
@@ -44,6 +43,11 @@ import {
   type SceneEditMode,
   type SetupStep,
 } from '../types/flow';
+import type {
+  PlayerLoadData,
+  PlayerProgressData,
+  SeekablePlayerHandle,
+} from '../types/player';
 import {getApiErrorDetail, isFetchBaseQueryError} from '../utils/apiErrors';
 import {cutScenesToDrafts} from '../utils/cutSceneDrafts';
 import {
@@ -61,12 +65,13 @@ export function VideoPlayerScreen() {
   const insets = useSafeAreaInsets();
   const {width, height} = useWindowDimensions();
   const isLandscape = width > height;
-  const videoRef = useRef<VideoRef>(null);
+  const videoRef = useRef<SeekablePlayerHandle>(null);
 
   const [step, setStep] = useState<SetupStep>('welcome');
   const [contentType, setContentType] = useState<ContentType | null>(null);
   const [sceneEditMode, setSceneEditMode] = useState<SceneEditMode>('create');
   const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [videoFileName, setVideoFileName] = useState('');
 
   const [movieTitle, setMovieTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
@@ -165,6 +170,7 @@ export function VideoPlayerScreen() {
     setContentType(null);
     setSceneEditMode('create');
     setVideoUri(null);
+    setVideoFileName('');
     setMovieTitle('');
     setReleaseYear('');
     setSeriesTitle('');
@@ -199,11 +205,43 @@ export function VideoPlayerScreen() {
 
     try {
       const [result] = await pick({
-        type: [types.video],
+        type: VIDEO_PICK_TYPES,
         allowMultiSelection: false,
       });
 
-      setVideoUri(result.uri);
+      const selectedName = result.name ?? result.uri;
+      const supportError = getPlaybackSupportError(selectedName);
+      if (supportError) {
+        setErrorMessage(supportError);
+        return;
+      }
+
+      const fileName =
+        result.name?.trim() ||
+        `video-${Date.now()}.${selectedName.split('.').pop() ?? 'mp4'}`;
+
+      // iOS security-scoped picker URIs are temporary; copy into app storage
+      // so react-native-video can open the file reliably.
+      const [copyResult] = await keepLocalCopy({
+        files: [
+          {
+            uri: result.uri,
+            fileName,
+          },
+        ],
+        destination: 'cachesDirectory',
+      });
+
+      if (copyResult.status !== 'success') {
+        setErrorMessage(
+          copyResult.copyError ||
+            'Could not copy the selected video into the app. Please try again.',
+        );
+        return;
+      }
+
+      setVideoUri(copyResult.localUri);
+      setVideoFileName(fileName);
       setVideoDuration(0);
       setContentType(null);
       setSceneEditMode('create');
@@ -239,7 +277,7 @@ export function VideoPlayerScreen() {
     setStep('identify');
   }, []);
 
-  const handleProbeLoad = useCallback((data: OnLoadData) => {
+  const handleProbeLoad = useCallback((data: PlayerLoadData) => {
     setVideoDuration(data.duration);
   }, []);
 
@@ -609,14 +647,14 @@ export function VideoPlayerScreen() {
     videoDuration,
   ]);
 
-  const handleVideoLoad = useCallback((data: OnLoadData) => {
+  const handleVideoLoad = useCallback((data: PlayerLoadData) => {
     setDuration(data.duration);
     setCurrentTime(data.currentTime);
     setVideoDuration(data.duration);
   }, []);
 
   const handleVideoProgress = useCallback(
-    (progress: OnProgressData) => {
+    (progress: PlayerProgressData) => {
       if (!isScrubbing) {
         setCurrentTime(progress.currentTime);
       }
@@ -626,7 +664,7 @@ export function VideoPlayerScreen() {
   );
 
   const handleVideoSeek = useCallback(
-    (seekEvent: OnSeekData) => {
+    (seekEvent: {currentTime: number}) => {
       setCurrentTime(seekEvent.currentTime);
       handleSeek(seekEvent);
     },
@@ -682,18 +720,20 @@ export function VideoPlayerScreen() {
           : {paddingTop: insets.top, paddingBottom: insets.bottom},
       ]}>
       {videoUri && isSetupStep ? (
-        <Video
-          source={{uri: videoUri}}
-          style={styles.hiddenVideo}
+        <AppVideoSurface
+          uri={videoUri}
+          fileName={videoFileName}
           paused
+          hidden
           onLoad={handleProbeLoad}
         />
       ) : null}
 
       {step === 'playing' && videoUri ? (
         <VideoPlayerPanel
-          videoRef={videoRef}
+          playerRef={videoRef}
           videoUri={videoUri}
+          videoFileName={videoFileName}
           paused={paused}
           volume={volume}
           duration={duration}
@@ -723,6 +763,13 @@ export function VideoPlayerScreen() {
           onVolumeChange={setVolume}
           onResetSession={resetSession}
           onBackFromPlayer={resetSession}
+          onPlaybackError={message => {
+            setPaused(true);
+            setErrorMessage(message);
+            setStep('welcome');
+            setVideoUri(null);
+            setVideoFileName('');
+          }}
         />
       ) : (
         <ScrollView

@@ -3,6 +3,8 @@ PODS:
   - hermes-engine (250829098.0.14):
     - hermes-engine/Pre-built (= 250829098.0.14)
   - hermes-engine/Pre-built (250829098.0.14)
+  - MobileVLCKit (3.7.3)
+  - Mute (0.6.1)
   - RCTDeprecation (0.86.0)
   - RCTRequired (0.86.0)
   - RCTSwiftUI (0.86.0)
@@ -1448,6 +1450,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-orientation-locker (1.7.0):
+    - React-Core
   - react-native-safe-area-context (5.8.0):
     - hermes-engine
     - RCTRequired
@@ -1562,6 +1566,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-vector-icons-ionicons (13.1.2)
   - react-native-video (6.19.2):
     - hermes-engine
     - RCTRequired
@@ -1630,6 +1635,13 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-vlc-media-player (1.0.38):
+    - MobileVLCKit (= 3.7.3)
+    - React
+    - TVVLCKit (= 3.5.1)
+  - react-native-volume-manager (2.0.8):
+    - Mute
+    - React-Core
   - React-NativeModulesApple (0.86.0):
     - hermes-engine
     - React-callinvoker
@@ -2071,9 +2083,13 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
+  - react-native-orientation-locker (from `../node_modules/react-native-orientation-locker`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
+  - "react-native-vector-icons-ionicons (from `../node_modules/@react-native-vector-icons/ionicons`)"
   - react-native-video (from `../node_modules/react-native-video`)
+  - react-native-vlc-media-player (from `../node_modules/react-native-vlc-media-player`)
+  - react-native-volume-manager (from `../node_modules/react-native-volume-manager`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2110,6 +2126,11 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
+
+SPEC REPOS:
+  trunk:
+    - MobileVLCKit
+    - Mute
 
 EXTERNAL SOURCES:
   FBLazyVector:
@@ -2193,12 +2214,20 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
   react-native-document-picker:
     :path: "../node_modules/@react-native-documents/picker"
+  react-native-orientation-locker:
+    :path: "../node_modules/react-native-orientation-locker"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-slider:
     :path: "../node_modules/@react-native-community/slider"
+  react-native-vector-icons-ionicons:
+    :path: "../node_modules/@react-native-vector-icons/ionicons"
   react-native-video:
     :path: "../node_modules/react-native-video"
+  react-native-vlc-media-player:
+    :path: "../node_modules/react-native-vlc-media-player"
+  react-native-volume-manager:
+    :path: "../node_modules/react-native-volume-manager"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-networking:
@@ -2274,7 +2303,9 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   FBLazyVector: b3e7ad108f0d882e30445c5527d774e3fd432f3d
-  hermes-engine: dbbb2a86b85aba3bea73204cac7eddb972e9dd22
+  hermes-engine: 22d36b1069b3331ccd4428068808524e77acdbaa
+  MobileVLCKit: 73d7ddb52238b6885b70b0f281cae75a0a6e3ac0
+  Mute: 20135a96076f140cc82bfc8b810e2d6150d8ec7e
   RCTDeprecation: 2a74a2c57675e64419bd89078efde81f7c1de90b
   RCTRequired: 30451112e6fef4e6f31b4e7eee0845156e35e4b0
   RCTSwiftUI: 5aaf0b07e747ba749dc6acc94d8bd41eea4b570f
@@ -2313,9 +2344,13 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 03752e60738a797bb49f4d6cb0291dfa398099b8
   React-mutationobservernativemodule: 2e568e13c98bd185fe83266795233fa7ad2cbc19
   react-native-document-picker: 1bf3e97a53c205191d34bc3a9bbcb57fbe1c77d5
+  react-native-orientation-locker: 5819fd23ca89cbac0d736fb4314745f62716d517
   react-native-safe-area-context: c1eb308f4b36372a4de4b3bdaa8ed695ec3dd461
   react-native-slider: 8824cf332b11bf5149f6576c8c8b32b4f93f82ac
+  react-native-vector-icons-ionicons: 6831196cf1486bfd26b715d749c5c9a7d67bc0eb
   react-native-video: 84f5283aaed3484b5b4914095ab16a9dd3477cca
+  react-native-vlc-media-player: 63e421502d2f2d8241dddd9593f91995ee029e27
+  react-native-volume-manager: 25d400a8fdb7b0e93a50cad33b745fb9e6577a30
   React-NativeModulesApple: a4713821c9caae40ae33eef933a6e692a6f4a81d
   React-networking: b344a1a41a4729ef859123b7a234f3092761cb25
   React-oscompat: 0b72a7e926954a0415ccd83e0748b6561fe45367
