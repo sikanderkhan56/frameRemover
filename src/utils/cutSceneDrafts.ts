@@ -1,10 +1,12 @@
-import type {SkipReason} from '../constants/skipReasons';
+import {normalizeSkipReason} from '../constants/skipReasons';
 import type {CutScene} from '../types/content';
 import type {TimeFields} from '../types/flow';
 import {
   createEmptyCutSceneDraft,
   type CutSceneDraft,
 } from '../types/flow';
+import {formatClockTimestamp} from './frameSkip';
+import {parseTimeFields, parseTimeInput} from './time';
 
 export function secondsToTimeFields(totalSeconds: number): TimeFields {
   const total = Math.max(0, Math.floor(totalSeconds));
@@ -13,10 +15,28 @@ export function secondsToTimeFields(totalSeconds: number): TimeFields {
   const seconds = total % 60;
 
   return {
-    hours: hours > 0 ? String(hours) : '',
-    minutes: minutes > 0 || hours > 0 ? String(minutes) : '',
-    seconds: seconds > 0 || (hours === 0 && minutes === 0) ? String(seconds) : '',
+    hours: String(hours),
+    minutes: String(minutes),
+    seconds: String(seconds),
   };
+}
+
+export function timeFieldsToClock(fields: TimeFields): string {
+  const total = parseTimeFields(fields);
+  if (total === null) {
+    return '';
+  }
+
+  return formatClockTimestamp(total);
+}
+
+export function clockToTimeFields(value: string): TimeFields | null {
+  const total = parseTimeInput(value);
+  if (total === null) {
+    return null;
+  }
+
+  return secondsToTimeFields(total);
 }
 
 export function cutSceneToDraft(scene: CutScene, index: number): CutSceneDraft {
@@ -24,14 +44,16 @@ export function cutSceneToDraft(scene: CutScene, index: number): CutSceneDraft {
     id: `scene-${index}-${scene.start}-${scene.end}`,
     start: secondsToTimeFields(scene.start),
     end: secondsToTimeFields(scene.end),
-    reason: scene.reason as SkipReason,
+    reason: normalizeSkipReason(scene.reason),
   };
 }
 
 export function cutScenesToDrafts(scenes: CutScene[]): CutSceneDraft[] {
   if (scenes.length === 0) {
-    return [createEmptyCutSceneDraft()];
+    return [];
   }
 
   return scenes.map(cutSceneToDraft);
 }
+
+export {createEmptyCutSceneDraft};

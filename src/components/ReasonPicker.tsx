@@ -72,7 +72,7 @@ export function ReasonPicker({value, onChange, sceneIndex}: ReasonPickerProps) {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 4,
+    zIndex: 1,
   },
   trigger: {
     alignItems: 'center',
@@ -86,12 +86,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   triggerOpen: {
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderColor: '#3b82f6',
+    borderColor: '#60a5fa',
   },
   triggerText: {
     color: '#ffffff',
+    flex: 1,
     fontSize: 15,
   },
   triggerPlaceholder: {
@@ -99,28 +98,26 @@ const styles = StyleSheet.create({
   },
   chevron: {
     color: '#9ca3af',
-    fontSize: 12,
+    fontSize: 11,
+    marginLeft: 8,
   },
   menu: {
-    backgroundColor: '#0f1115',
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    borderColor: '#3b82f6',
-    borderTopWidth: 0,
+    backgroundColor: '#1a1f27',
+    borderColor: '#3a3f4b',
+    borderRadius: 8,
     borderWidth: 1,
+    marginTop: 6,
     overflow: 'hidden',
   },
   option: {
-    borderTopColor: '#3a3f4b',
-    borderTopWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   optionSelected: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: '#243044',
   },
   optionText: {
-    color: '#e5e7eb',
+    color: '#d1d5db',
     fontSize: 15,
   },
   optionTextSelected: {

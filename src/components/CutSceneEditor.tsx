@@ -1,10 +1,29 @@
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
-import {ReasonPicker} from './ReasonPicker';
+import {useCallback, useMemo, useState} from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import {Ionicons} from '@react-native-vector-icons/ionicons';
+import {
+  SKIP_REASONS,
+  getSkipReasonLabel,
+  getSkipReasonStyle,
+  type SkipReason,
+} from '../constants/skipReasons';
 import {
   createEmptyCutSceneDraft,
   type CutSceneDraft,
-  type TimeFields,
 } from '../types/flow';
+import {
+  clockToTimeFields,
+  timeFieldsToClock,
+} from '../utils/cutSceneDrafts';
+import {parseTimeFields} from '../utils/time';
 
 type CutSceneEditorProps = {
   scenes: CutSceneDraft[];
@@ -12,76 +31,26 @@ type CutSceneEditorProps = {
   errorMessage?: string | null;
 };
 
-type TimeFieldsInputProps = {
-  label: string;
-  value: TimeFields;
-  onChange: (value: TimeFields) => void;
-  sceneIndex: number;
+type SheetMode = 'add' | 'edit';
+
+type SheetState = {
+  mode: SheetMode;
+  sceneId: string | null;
+  start: string;
+  end: string;
+  reason: SkipReason | '';
+  error: string | null;
 };
 
-function TimeFieldsInput({
-  label,
-  value,
-  onChange,
-  sceneIndex,
-}: TimeFieldsInputProps) {
-  const updateField = (field: keyof TimeFields, text: string) => {
-    const sanitized = text.replace(/[^0-9]/g, '');
-    onChange({...value, [field]: sanitized});
+function createEmptySheetState(): SheetState {
+  return {
+    mode: 'add',
+    sceneId: null,
+    start: '',
+    end: '',
+    reason: '',
+    error: null,
   };
-
-  return (
-    <View style={styles.timeGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.timeRow}>
-        <View style={styles.timeField}>
-          <Text style={styles.timeUnitLabel}>Hr</Text>
-          <TextInput
-            accessibilityLabel={`Scene ${sceneIndex + 1} ${label} hours`}
-            keyboardType="number-pad"
-            maxLength={3}
-            onChangeText={text => updateField('hours', text)}
-            placeholder="—"
-            placeholderTextColor="#4b5563"
-            style={styles.timeInput}
-            value={value.hours}
-          />
-        </View>
-
-        <Text style={styles.timeSeparator}>:</Text>
-
-        <View style={styles.timeField}>
-          <Text style={styles.timeUnitLabel}>Min</Text>
-          <TextInput
-            accessibilityLabel={`Scene ${sceneIndex + 1} ${label} minutes`}
-            keyboardType="number-pad"
-            maxLength={2}
-            onChangeText={text => updateField('minutes', text)}
-            placeholder="—"
-            placeholderTextColor="#4b5563"
-            style={styles.timeInput}
-            value={value.minutes}
-          />
-        </View>
-
-        <Text style={styles.timeSeparator}>:</Text>
-
-        <View style={styles.timeField}>
-          <Text style={styles.timeUnitLabel}>Sec</Text>
-          <TextInput
-            accessibilityLabel={`Scene ${sceneIndex + 1} ${label} seconds`}
-            keyboardType="number-pad"
-            maxLength={2}
-            onChangeText={text => updateField('seconds', text)}
-            placeholder="—"
-            placeholderTextColor="#4b5563"
-            style={styles.timeInput}
-            value={value.seconds}
-          />
-        </View>
-      </View>
-    </View>
-  );
 }
 
 export function CutSceneEditor({
@@ -89,91 +58,294 @@ export function CutSceneEditor({
   onChange,
   errorMessage,
 }: CutSceneEditorProps) {
-  const updateScene = (
-    id: string,
-    updater: (scene: CutSceneDraft) => CutSceneDraft,
-  ) => {
-    onChange(scenes.map(scene => (scene.id === id ? updater(scene) : scene)));
-  };
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [sheet, setSheet] = useState<SheetState>(createEmptySheetState);
 
-  const removeScene = (id: string) => {
-    if (scenes.length === 1) {
+  const openAddSheet = useCallback(() => {
+    setSheet(createEmptySheetState());
+    setSheetVisible(true);
+  }, []);
+
+  const openEditSheet = useCallback((scene: CutSceneDraft) => {
+    setSheet({
+      mode: 'edit',
+      sceneId: scene.id,
+      start: timeFieldsToClock(scene.start),
+      end: timeFieldsToClock(scene.end),
+      reason: scene.reason,
+      error: null,
+    });
+    setSheetVisible(true);
+  }, []);
+
+  const closeSheet = useCallback(() => {
+    setSheetVisible(false);
+    setSheet(createEmptySheetState());
+  }, []);
+
+  const removeScene = useCallback(
+    (id: string) => {
+      onChange(scenes.filter(scene => scene.id !== id));
+    },
+    [onChange, scenes],
+  );
+
+  const handleSaveSheet = useCallback(() => {
+    const startFields = clockToTimeFields(sheet.start);
+    const endFields = clockToTimeFields(sheet.end);
+    const startSeconds = startFields ? parseTimeFields(startFields) : null;
+    const endSeconds = endFields ? parseTimeFields(endFields) : null;
+
+    if (startSeconds === null || !startFields) {
+      setSheet(current => ({
+        ...current,
+        error: 'Enter a valid start time (HH:MM:SS).',
+      }));
       return;
     }
-    onChange(scenes.filter(scene => scene.id !== id));
-  };
 
-  const addScene = () => {
-    onChange([...scenes, createEmptyCutSceneDraft()]);
-  };
+    if (endSeconds === null || !endFields) {
+      setSheet(current => ({
+        ...current,
+        error: 'Enter a valid end time (HH:MM:SS).',
+      }));
+      return;
+    }
+
+    if (!sheet.reason) {
+      setSheet(current => ({
+        ...current,
+        error: 'Select a reason.',
+      }));
+      return;
+    }
+
+    if (startSeconds >= endSeconds) {
+      setSheet(current => ({
+        ...current,
+        error: 'Start must be before end.',
+      }));
+      return;
+    }
+
+    if (sheet.mode === 'edit' && sheet.sceneId) {
+      onChange(
+        scenes.map(scene =>
+          scene.id === sheet.sceneId
+            ? {
+                ...scene,
+                start: startFields,
+                end: endFields,
+                reason: sheet.reason,
+              }
+            : scene,
+        ),
+      );
+    } else {
+      const draft = createEmptyCutSceneDraft();
+      onChange([
+        ...scenes,
+        {
+          ...draft,
+          start: startFields,
+          end: endFields,
+          reason: sheet.reason,
+        },
+      ]);
+    }
+
+    closeSheet();
+  }, [closeSheet, onChange, scenes, sheet]);
+
+  const sheetTitle = sheet.mode === 'edit' ? 'Edit scene' : 'Add scene';
+
+  const reasonChips = useMemo(
+    () =>
+      SKIP_REASONS.map(reason => {
+        const selected = sheet.reason === reason.value;
+
+        return (
+          <Pressable
+            key={reason.value}
+            accessibilityRole="button"
+            accessibilityState={{selected}}
+            onPress={() =>
+              setSheet(current => ({
+                ...current,
+                reason: reason.value,
+                error: null,
+              }))
+            }
+            style={[
+              styles.reasonChip,
+              selected && {
+                backgroundColor: reason.style.backgroundColor,
+                borderColor: reason.style.borderColor,
+              },
+            ]}>
+            <Text
+              style={[
+                styles.reasonChipText,
+                selected && {color: reason.style.textColor},
+              ]}>
+              {reason.label}
+            </Text>
+          </Pressable>
+        );
+      }),
+    [sheet.reason],
+  );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Cut scenes to skip</Text>
-      <Text style={styles.hint}>
-        Enter when each scene starts and ends. Leave hours empty for scenes
-        under 1 hour, and leave minutes empty if you only need seconds. Pick a
-        reason from the list for each scene.
-      </Text>
+      {scenes.map(scene => {
+        const reasonStyle = getSkipReasonStyle(scene.reason);
+        const startLabel = timeFieldsToClock(scene.start) || '—';
+        const endLabel = timeFieldsToClock(scene.end) || '—';
 
-      {scenes.map((scene, index) => (
-        <View key={scene.id} style={styles.sceneCard}>
-          <Text style={styles.sceneLabel}>Scene {index + 1}</Text>
+        return (
+          <View key={scene.id} style={styles.sceneCard}>
+            <View style={styles.sceneCardBody}>
+              <Text style={styles.sceneTime}>
+                {startLabel} — {endLabel}
+              </Text>
+              {scene.reason ? (
+                <View
+                  style={[
+                    styles.reasonTag,
+                    {
+                      backgroundColor: reasonStyle.backgroundColor,
+                    },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.reasonTagText,
+                      {color: reasonStyle.textColor},
+                    ]}>
+                    {getSkipReasonLabel(scene.reason)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
 
-          <TimeFieldsInput
-            label="Start time"
-            sceneIndex={index}
-            value={scene.start}
-            onChange={start =>
-              updateScene(scene.id, current => ({...current, start}))
-            }
-          />
-
-          <TimeFieldsInput
-            label="End time"
-            sceneIndex={index}
-            value={scene.end}
-            onChange={end =>
-              updateScene(scene.id, current => ({...current, end}))
-            }
-          />
-
-          <Text style={styles.fieldLabel}>Reason</Text>
-          <ReasonPicker
-            sceneIndex={index}
-            value={scene.reason}
-            onChange={reason =>
-              updateScene(scene.id, current => ({...current, reason}))
-            }
-          />
-
-          {scenes.length > 1 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => removeScene(scene.id)}
-              style={({pressed}) => [
-                styles.removeButton,
-                pressed && styles.buttonPressed,
-              ]}>
-              <Text style={styles.removeButtonText}>Remove scene</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ))}
+            <View style={styles.sceneActions}>
+              <Pressable
+                accessibilityLabel="Edit scene"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => openEditSheet(scene)}
+                style={({pressed}) => [
+                  styles.iconButton,
+                  pressed && styles.pressed,
+                ]}>
+                <Ionicons color="#9CA3AF" name="pencil-outline" size={20} />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Delete scene"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => removeScene(scene.id)}
+                style={({pressed}) => [
+                  styles.iconButton,
+                  pressed && styles.pressed,
+                ]}>
+                <Ionicons color="#EF4444" name="trash-outline" size={20} />
+              </Pressable>
+            </View>
+          </View>
+        );
+      })}
 
       <Pressable
         accessibilityRole="button"
-        onPress={addScene}
+        onPress={openAddSheet}
         style={({pressed}) => [
           styles.addButton,
-          pressed && styles.buttonPressed,
+          pressed && styles.pressed,
         ]}>
-        <Text style={styles.addButtonText}>+ Add another scene</Text>
+        <Text style={styles.addButtonText}>+ Add Scene</Text>
       </Pressable>
 
       {errorMessage ? (
         <Text style={styles.errorText}>{errorMessage}</Text>
       ) : null}
+
+      <Modal
+        animationType="slide"
+        onRequestClose={closeSheet}
+        transparent
+        visible={sheetVisible}>
+        <View style={styles.sheetRoot}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={closeSheet}
+            style={styles.sheetBackdrop}
+          />
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{sheetTitle}</Text>
+
+            <Text style={styles.fieldLabel}>Start time</Text>
+            <TextInput
+              accessibilityLabel="Start time"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              onChangeText={text =>
+                setSheet(current => ({...current, start: text, error: null}))
+              }
+              placeholder="00:20:30"
+              placeholderTextColor="#9CA3AF"
+              style={styles.sheetInput}
+              value={sheet.start}
+            />
+
+            <Text style={styles.fieldLabel}>End time</Text>
+            <TextInput
+              accessibilityLabel="End time"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              onChangeText={text =>
+                setSheet(current => ({...current, end: text, error: null}))
+              }
+              placeholder="00:23:45"
+              placeholderTextColor="#9CA3AF"
+              style={styles.sheetInput}
+              value={sheet.end}
+            />
+
+            <Text style={styles.fieldLabel}>Reason</Text>
+            <View style={styles.reasonGrid}>{reasonChips}</View>
+
+            {sheet.error ? (
+              <Text style={styles.sheetErrorText}>{sheet.error}</Text>
+            ) : null}
+
+            <View style={styles.sheetActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={closeSheet}
+                style={({pressed}) => [
+                  styles.cancelButton,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleSaveSheet}
+                style={({pressed}) => [
+                  styles.saveButton,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.saveButtonText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -181,108 +353,191 @@ export function CutSceneEditor({
 const styles = StyleSheet.create({
   container: {
     gap: 12,
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  hint: {
-    color: '#6b7280',
-    fontSize: 13,
-    lineHeight: 20,
+    width: '100%',
   },
   sceneCard: {
-    backgroundColor: '#1a1f27',
-    borderRadius: 12,
-    gap: 8,
-    padding: 14,
-  },
-  sceneLabel: {
-    color: '#93c5fd',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  timeGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    color: '#9ca3af',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timeRow: {
-    alignItems: 'flex-end',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: {width: 0, height: 2},
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 1,
+      },
+      default: {},
+    }),
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#EEF0F3',
+    borderRadius: 16,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 6,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  timeField: {
+  sceneCardBody: {
     flex: 1,
+    gap: 8,
+  },
+  sceneTime: {
+    color: '#111827',
+    fontFamily: Platform.select({ios: 'Menlo', android: 'monospace'}),
+    fontSize: 15,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
+  reasonTag: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  reasonTagText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sceneActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
     gap: 4,
   },
-  timeUnitLabel: {
-    color: '#6b7280',
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  timeInput: {
-    backgroundColor: '#0f1115',
-    borderColor: '#3a3f4b',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#ffffff',
-    fontSize: 16,
-    fontVariant: ['tabular-nums'],
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    textAlign: 'center',
-  },
-  timeSeparator: {
-    color: '#6b7280',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  input: {
-    backgroundColor: '#0f1115',
-    borderColor: '#3a3f4b',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#ffffff',
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  iconButton: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   addButton: {
     alignItems: 'center',
-    borderColor: '#3b82f6',
-    borderRadius: 10,
+    borderColor: '#D1D5DB',
+    borderRadius: 14,
     borderStyle: 'dashed',
-    borderWidth: 1,
-    paddingVertical: 12,
+    borderWidth: 1.5,
+    paddingVertical: 14,
   },
   addButtonText: {
-    color: '#93c5fd',
-    fontSize: 14,
+    color: '#6B7280',
+    fontSize: 15,
     fontWeight: '600',
-  },
-  removeButton: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingVertical: 4,
-  },
-  removeButtonText: {
-    color: '#f87171',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  buttonPressed: {
-    opacity: 0.85,
   },
   errorText: {
-    color: '#f87171',
+    color: '#DC2626',
     fontSize: 13,
+    textAlign: 'center',
+  },
+  sheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+  },
+  sheetCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    gap: 8,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    backgroundColor: '#D1D5DB',
+    borderRadius: 999,
+    height: 5,
+    marginBottom: 10,
+    width: 42,
+  },
+  sheetTitle: {
+    color: '#111827',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  sheetInput: {
+    backgroundColor: '#ffffff',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    borderWidth: 1,
+    color: '#111827',
+    fontSize: 16,
+    fontVariant: ['tabular-nums'],
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  reasonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  reasonChip: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  reasonChipText: {
+    color: '#4B5563',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  sheetErrorText: {
+    color: '#DC2626',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  cancelButton: {
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 12,
+  },
+  cancelButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButton: {
+    alignItems: 'center',
+    backgroundColor: '#FF6B00',
+    borderRadius: 14,
+    flex: 1.4,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 12,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

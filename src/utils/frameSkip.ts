@@ -30,3 +30,15 @@ export function formatTimestamp(seconds: number): string {
 
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
+
+/** Always HH:MM:SS, matching the cut-scene editor Figma. */
+export function formatClockTimestamp(seconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  return `${hours.toString().padStart(2, '0')}:${minutes
+    .toString()
+    .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
