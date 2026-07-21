@@ -14,7 +14,9 @@ import {
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {Ionicons} from '@react-native-vector-icons/ionicons/static';
 import {useTvRemote} from '../hooks/useTvRemote';
+import {playerTheme as theme} from '../theme/playerTheme';
 import type {ContentType} from '../types/content';
 import type {
   PlayerLoadData,
@@ -26,6 +28,9 @@ import {formatTimestamp} from '../utils/frameSkip';
 import {computeVideoFrame} from '../utils/videoLayout';
 import {AppVideoSurface} from './AppVideoSurface';
 import {VideoControls} from './VideoControls';
+import {
+  getSkipReasonStyle,
+} from '../constants/skipReasons';
 
 type VideoPlayerPanelProps = {
   playerRef: RefObject<SeekablePlayerHandle | null>;
@@ -75,7 +80,7 @@ export function VideoPlayerPanel({
   skipNotice,
   contentType,
   contentLabel,
-  contentId,
+  contentId: _contentId,
   skipIntervals,
   onVideoLoad,
   onVideoProgress,
@@ -392,8 +397,8 @@ export function VideoPlayerPanel({
     <View style={[styles.root, isFullscreen && styles.rootFullscreen]}>
       <StatusBar
         animated
-        backgroundColor="#0f1115"
-        barStyle="light-content"
+        backgroundColor={isFullscreen ? '#000000' : theme.pageBg}
+        barStyle={isFullscreen ? 'light-content' : 'dark-content'}
         hidden={isFullscreen}
       />
 
@@ -485,6 +490,7 @@ export function VideoPlayerPanel({
 
           {skipNotice ? (
             <View style={styles.skipNotice} pointerEvents="none">
+              <Ionicons color={theme.white} name="play-skip-forward" size={14} />
               <Text style={styles.skipNoticeText}>{skipNotice}</Text>
             </View>
           ) : null}
@@ -504,7 +510,7 @@ export function VideoPlayerPanel({
               {top: insets.top + 8},
               pressed && styles.pressed,
             ]}>
-            <Text style={styles.exitFullscreenButtonText}>✕</Text>
+            <Ionicons color={theme.white} name="close" size={22} />
           </Pressable>
         </Animated.View>
       ) : null}
@@ -515,7 +521,7 @@ export function VideoPlayerPanel({
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: Math.max(insets.bottom, 16),
               paddingTop: insets.top + 12,
             },
             isLandscape && styles.scrollContentLandscape,
@@ -543,22 +549,73 @@ export function VideoPlayerPanel({
                 isLandscape && styles.sideColumnLandscape,
               ]}>
               <View style={styles.infoPanel}>
-                <Text style={styles.contentTypeBadge}>
-                  {contentType === 'episode' ? 'Web series' : 'Movie'}
-                </Text>
+                <View
+                  style={[
+                    styles.contentTypeBadge,
+                    contentType === 'episode'
+                      ? styles.contentTypeBadgeEpisode
+                      : styles.contentTypeBadgeMovie,
+                  ]}>
+                  <Ionicons
+                    color={
+                      contentType === 'episode' ? theme.purple : theme.orange
+                    }
+                    name={contentType === 'episode' ? 'tv-outline' : 'film-outline'}
+                    size={14}
+                  />
+                  <Text
+                    style={[
+                      styles.contentTypeBadgeText,
+                      contentType === 'episode'
+                        ? styles.contentTypeBadgeTextEpisode
+                        : styles.contentTypeBadgeTextMovie,
+                    ]}>
+                    {contentType === 'episode' ? 'Web series' : 'Movie'}
+                  </Text>
+                </View>
+
                 <Text style={styles.infoTitle}>{contentLabel}</Text>
-                <Text style={styles.infoSubtitle}>ID: {contentId}</Text>
+
+                <Text style={styles.sectionLabel}>
+                  {skipIntervals.length > 0
+                    ? `${skipIntervals.length} cut scene${
+                        skipIntervals.length === 1 ? '' : 's'
+                      }`
+                    : 'Cut scenes'}
+                </Text>
 
                 {skipIntervals.length > 0 ? (
-                  skipIntervals.map(interval => (
-                    <Text
-                      key={`${interval.start}-${interval.end}`}
-                      style={styles.infoRow}>
-                      {interval.label ? `${interval.label}: ` : ''}
-                      {formatTimestamp(interval.start)} –{' '}
-                      {formatTimestamp(interval.end)}
-                    </Text>
-                  ))
+                  skipIntervals.map(interval => {
+                    const reasonStyle = getSkipReasonStyle(
+                      interval.reason ?? 'other',
+                    );
+
+                    return (
+                      <View
+                        key={`${interval.start}-${interval.end}`}
+                        style={styles.sceneRow}>
+                        <Text style={styles.sceneTime}>
+                          {formatTimestamp(interval.start)} –{' '}
+                          {formatTimestamp(interval.end)}
+                        </Text>
+                        {interval.label ? (
+                          <View
+                            style={[
+                              styles.sceneTag,
+                              {backgroundColor: reasonStyle.backgroundColor},
+                            ]}>
+                            <Text
+                              style={[
+                                styles.sceneTagText,
+                                {color: reasonStyle.textColor},
+                              ]}>
+                              {interval.label}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })
                 ) : (
                   <Text style={styles.infoRow}>
                     No cut scenes — playing full video.
@@ -587,6 +644,7 @@ export function VideoPlayerPanel({
 
 const styles = StyleSheet.create({
   root: {
+    backgroundColor: theme.pageBg,
     flex: 1,
   },
   rootFullscreen: {
@@ -613,12 +671,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   playerLayout: {
-    gap: 12,
+    gap: 14,
   },
   playerLayoutLandscape: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   inlineVideoSpacer: {
     flexShrink: 0,
@@ -632,7 +690,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   videoStageRounded: {
-    borderRadius: 12,
+    borderRadius: 18,
   },
   videoElement: {
     position: 'absolute',
@@ -648,17 +706,17 @@ const styles = StyleSheet.create({
   loadingOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
     justifyContent: 'center',
     zIndex: 5,
   },
   loadingSpinner: {
-    borderColor: '#ef4444',
+    borderColor: theme.orange,
     borderRadius: 40,
-    borderRightColor: 'rgba(239, 68, 68, 0.18)',
-    borderWidth: 6,
-    height: 80,
-    width: 80,
+    borderRightColor: 'rgba(255, 107, 0, 0.18)',
+    borderWidth: 5,
+    height: 64,
+    width: 64,
   },
   exitButtonWrap: {
     position: 'absolute',
@@ -674,83 +732,127 @@ const styles = StyleSheet.create({
     minWidth: 280,
   },
   skipNotice: {
-    backgroundColor: 'rgba(59, 130, 246, 0.92)',
-    borderRadius: 8,
-    left: 12,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: theme.orange,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 6,
+    left: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     position: 'absolute',
-    right: 12,
-    top: 12,
+    right: 16,
+    top: 14,
     zIndex: 4,
   },
   skipNoticeText: {
-    color: '#ffffff',
+    color: theme.white,
+    flexShrink: 1,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
   },
   exitFullscreenButton: {
     alignItems: 'center',
-    height: 40,
+    backgroundColor: theme.glassStrong,
+    borderRadius: 22,
+    height: 44,
     justifyContent: 'center',
     position: 'absolute',
     right: 16,
-    width: 40,
-  },
-  exitFullscreenButtonText: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '400',
+    width: 44,
   },
   infoPanel: {
-    backgroundColor: '#1a1f27',
-    borderRadius: 12,
-    gap: 6,
-    padding: 16,
+    backgroundColor: theme.cardBg,
+    borderColor: theme.cardBorder,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 18,
   },
   contentTypeBadge: {
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#374151',
-    borderRadius: 6,
-    color: '#d1d5db',
-    fontSize: 11,
-    fontWeight: '600',
-    overflow: 'hidden',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    textTransform: 'uppercase',
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  contentTypeBadgeMovie: {
+    backgroundColor: theme.orangeSoft,
+  },
+  contentTypeBadgeEpisode: {
+    backgroundColor: theme.purpleSoft,
+  },
+  contentTypeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  contentTypeBadgeTextMovie: {
+    color: theme.orange,
+  },
+  contentTypeBadgeTextEpisode: {
+    color: theme.purple,
   },
   infoTitle: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: theme.text,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  sectionLabel: {
+    color: theme.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  sceneRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sceneTime: {
+    color: theme.text,
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
     fontWeight: '600',
   },
-  infoSubtitle: {
-    color: '#6b7280',
+  sceneTag: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  sceneTagText: {
     fontSize: 12,
-    marginBottom: 4,
+    fontWeight: '700',
   },
   infoRow: {
-    color: '#b8bec8',
+    color: theme.textMuted,
     fontSize: 14,
+    lineHeight: 20,
   },
   secondaryButton: {
-    alignSelf: 'flex-start',
-    borderColor: '#3b82f6',
-    borderRadius: 10,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderColor: theme.cardBorder,
+    borderRadius: 28,
     borderWidth: 1,
     marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   secondaryButtonPressed: {
-    opacity: 0.85,
+    backgroundColor: '#F9FAFB',
   },
   secondaryButtonText: {
-    color: '#93c5fd',
-    fontSize: 14,
-    fontWeight: '600',
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: '700',
   },
   pressed: {
     opacity: 0.85,

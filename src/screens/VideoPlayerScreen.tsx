@@ -1,13 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
   ScrollView,
   StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -17,12 +11,8 @@ import {
   keepLocalCopy,
   pick,
 } from '@react-native-documents/picker';
-import LinearGradient from 'react-native-linear-gradient';
-import {Ionicons} from '@react-native-vector-icons/ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {CutSceneEditor} from '../components/CutSceneEditor';
 import {AppVideoSurface} from '../components/AppVideoSurface';
-import {VideoPlayerPanel} from '../components/VideoPlayerPanel';
 import {PLAYER_SKIP_SECONDS} from '../components/VideoControls';
 import {SKIP_LEAD_TIME_SECONDS} from '../constants/playback';
 import {
@@ -42,6 +32,7 @@ import {
   useUpdateEpisodeMutation,
   useUpdateMovieMutation,
 } from '../store/api/contentApi';
+import {setupStyles as styles} from '../theme/setupStyles';
 import type {
   ContentType,
   CutScene,
@@ -67,8 +58,17 @@ import {
   parseReleaseYear,
 } from '../utils/contentId';
 import {draftsToCutScenes} from '../utils/cutSceneValidation';
-import {formatClockTimestamp, formatTimestamp} from '../utils/frameSkip';
+import {formatTimestamp} from '../utils/frameSkip';
 import {cutScenesToSkipIntervals} from '../utils/movieMappers';
+import {AlreadyExistsScreen} from './AlreadyExistsScreen';
+import {CheckingScreen} from './CheckingScreen';
+import {ContentTypeScreen} from './ContentTypeScreen';
+import {EditCutScenesScreen} from './EditCutScenesScreen';
+import {EpisodeDetailsScreen} from './EpisodeDetailsScreen';
+import {MovieDetailsScreen} from './MovieDetailsScreen';
+import {NotFoundScreen} from './NotFoundScreen';
+import {PlayerScreen} from './PlayerScreen';
+import {WelcomeScreen} from './WelcomeScreen';
 
 export function VideoPlayerScreen() {
   const insets = useSafeAreaInsets();
@@ -136,21 +136,6 @@ export function VideoPlayerScreen() {
     () => cutScenesToSkipIntervals(cutScenes),
     [cutScenes],
   );
-
-  const parsedReleaseYear = useMemo(() => {
-    const year = Number(releaseYear.trim());
-    return Number.isInteger(year) ? year : null;
-  }, [releaseYear]);
-
-  const parsedSeason = useMemo(() => {
-    const season = Number(seasonNumber.trim());
-    return Number.isInteger(season) ? season : null;
-  }, [seasonNumber]);
-
-  const parsedEpisode = useMemo(() => {
-    const episode = Number(episodeNumber.trim());
-    return Number.isInteger(episode) ? episode : null;
-  }, [episodeNumber]);
 
   useEffect(() => {
     const query = movieTitle.trim();
@@ -843,20 +828,30 @@ export function VideoPlayerScreen() {
     setStep(sceneEditMode === 'update' ? 'already_exists' : 'not_found');
   }, [sceneEditMode]);
 
+
   const isWelcome = step === 'welcome';
   const isContentTypeStep = step === 'choose_content_type';
   const isMovieIdentify = step === 'identify' && contentType === 'movie';
   const isEpisodeIdentify = step === 'identify' && contentType === 'episode';
   const isIdentifyStep = isMovieIdentify || isEpisodeIdentify;
   const isAlreadyExists = step === 'already_exists';
-  const isEditCutScenes =
-    step === 'edit_cut_scenes' || step === 'saving';
+  const isNotFound = step === 'not_found';
+  const isChecking = step === 'checking';
+  const isEditCutScenes = step === 'edit_cut_scenes' || step === 'saving';
   const isLightSetup =
     isWelcome ||
     isContentTypeStep ||
     isIdentifyStep ||
     isAlreadyExists ||
+    isNotFound ||
+    isChecking ||
     isEditCutScenes;
+
+  const statusBarBackground = isWelcome || isIdentifyStep || isAlreadyExists || isNotFound || isChecking
+    ? '#ffffff'
+    : isContentTypeStep || isEditCutScenes
+      ? '#F8F9FB'
+      : '#0f1115';
 
   return (
     <View
@@ -864,22 +859,20 @@ export function VideoPlayerScreen() {
         styles.container,
         isWelcome && styles.containerWelcome,
         isContentTypeStep && styles.containerContentType,
-        (isIdentifyStep || isAlreadyExists) && styles.containerMovieDetails,
+        (isIdentifyStep || isAlreadyExists || isNotFound || isChecking) &&
+          styles.containerMovieDetails,
         isEditCutScenes && styles.containerEditScenes,
-        step === 'playing'
-          ? styles.containerPlaying
-          : {paddingTop: insets.top, paddingBottom: insets.bottom},
+        step === 'playing' && {backgroundColor: '#000000'},
+        step !== 'playing' && {
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
       ]}>
       <StatusBar
         barStyle={isLightSetup ? 'dark-content' : 'light-content'}
-        backgroundColor={
-          isWelcome || isIdentifyStep || isAlreadyExists
-            ? '#ffffff'
-            : isContentTypeStep || isEditCutScenes
-              ? '#F8F9FB'
-              : '#0f1115'
-        }
+        backgroundColor={statusBarBackground}
       />
+
       {videoUri && isSetupStep ? (
         <AppVideoSurface
           uri={videoUri}
@@ -891,7 +884,7 @@ export function VideoPlayerScreen() {
       ) : null}
 
       {step === 'playing' && videoUri ? (
-        <VideoPlayerPanel
+        <PlayerScreen
           playerRef={videoRef}
           videoUri={videoUri}
           videoFileName={videoFileName}
@@ -939,1136 +932,114 @@ export function VideoPlayerScreen() {
             styles.scrollContent,
             isWelcome && styles.scrollContentWelcome,
             isContentTypeStep && styles.scrollContentContentType,
-            isMovieIdentify && styles.scrollContentMovieDetails,
-            isEpisodeIdentify && styles.scrollContentMovieDetails,
-            isAlreadyExists && styles.scrollContentResult,
+            isIdentifyStep && styles.scrollContentMovieDetails,
+            (isAlreadyExists || isNotFound || isChecking) &&
+              styles.scrollContentResult,
             isEditCutScenes && styles.scrollContentEditScenes,
             isLandscape && styles.scrollContentLandscape,
           ]}
           keyboardShouldPersistTaps="handled">
           {isWelcome ? (
-            <View style={styles.welcomeContent}>
-              <Text style={styles.welcomeTitle}>Frame Remover</Text>
-              <Text style={styles.welcomeSubtitle}>
-                Choose a video, tell us if it is a movie or web series episode,
-                and we will load or create skip scenes from the backend.
-              </Text>
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={isPicking}
-                onPress={handleChooseFile}
-                style={({pressed}) => [
-                  styles.welcomeButtonShadow,
-                  (pressed || isPicking) && styles.welcomeButtonPressed,
-                ]}>
-                <LinearGradient
-                  colors={['#FF8A00', '#FF6B00']}
-                  end={{x: 0.5, y: 1}}
-                  start={{x: 0.5, y: 0}}
-                  style={styles.welcomeButton}>
-                  <View style={styles.welcomeButtonInner}>
-                    {isPicking ? (
-                      <ActivityIndicator color="#ffffff" />
-                    ) : (
-                      <Text style={styles.welcomeButtonText}>Choose Video</Text>
-                    )}
-                  </View>
-                </LinearGradient>
-              </Pressable>
-
-              {errorMessage ? (
-                <Text style={styles.welcomeErrorText}>{errorMessage}</Text>
-              ) : null}
-            </View>
+            <WelcomeScreen
+              errorMessage={errorMessage}
+              isPicking={isPicking}
+              onChooseFile={handleChooseFile}
+            />
           ) : null}
 
           {isContentTypeStep ? (
-            <View style={styles.contentTypeScreen}>
-              <View style={styles.contentTypeMain}>
-                <Text style={styles.contentTypeTitle}>
-                  What are you watching?
-                </Text>
-                <Text style={styles.contentTypeSubtitle}>
-                  This helps us look up the right cut scenes in the database.
-                </Text>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => handleSelectContentType('movie')}
-                  style={({pressed}) => [
-                    styles.contentTypeCard,
-                    pressed && styles.contentTypeCardPressed,
-                  ]}>
-                  <View
-                    style={[
-                      styles.contentTypeIconWrap,
-                      styles.contentTypeIconMovie,
-                    ]}>
-                    <Ionicons color="#FF6B00" name="film-outline" size={24} />
-                  </View>
-                  <View style={styles.contentTypeCardText}>
-                    <Text style={styles.contentTypeCardTitle}>Movie</Text>
-                    <Text style={styles.contentTypeCardHint}>
-                      Enter title and release year
-                    </Text>
-                  </View>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => handleSelectContentType('episode')}
-                  style={({pressed}) => [
-                    styles.contentTypeCard,
-                    pressed && styles.contentTypeCardPressed,
-                  ]}>
-                  <View
-                    style={[
-                      styles.contentTypeIconWrap,
-                      styles.contentTypeIconSeries,
-                    ]}>
-                    <Ionicons color="#7C3AED" name="tv-outline" size={24} />
-                  </View>
-                  <View style={styles.contentTypeCardText}>
-                    <Text style={styles.contentTypeCardTitle}>
-                      Web series episode
-                    </Text>
-                    <Text style={styles.contentTypeCardHint}>
-                      Enter series name, season, and episode
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={resetSession}
-                style={({pressed}) => [
-                  styles.contentTypeFooterButton,
-                  pressed && styles.buttonPressed,
-                ]}>
-                <Text style={styles.contentTypeFooterLabel}>
-                  Choose a different video
-                </Text>
-              </Pressable>
-            </View>
+            <ContentTypeScreen
+              onChooseDifferentVideo={resetSession}
+              onSelectType={handleSelectContentType}
+            />
           ) : null}
 
           {isMovieIdentify ? (
-            <View style={styles.movieDetailsScreen}>
-              <View style={styles.movieDetailsMain}>
-                <View style={styles.movieDetailsHeader}>
-                  <Pressable
-                    accessibilityLabel="Back"
-                    accessibilityRole="button"
-                    hitSlop={12}
-                    onPress={() => setStep('choose_content_type')}
-                    style={({pressed}) => [
-                      styles.movieDetailsBackIcon,
-                      pressed && styles.buttonPressed,
-                    ]}>
-                    <Ionicons color="#111827" name="chevron-back" size={28} />
-                  </Pressable>
-                  <Text style={styles.movieDetailsTitle}>Movie details</Text>
-                </View>
-
-                <Text style={styles.movieDetailsSubtitle}>
-                  Enter the movie title and release year so we can find the
-                  right version (remakes share names but differ by year).
-                </Text>
-
-                <Text style={styles.movieDetailsFieldLabel}>Movie title</Text>
-                <View style={styles.movieSearchField}>
-                  <TextInput
-                    accessibilityLabel="Movie title"
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    onChangeText={handleMovieTitleChange}
-                    placeholder="e.g. Inception"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.movieDetailsInput}
-                    value={movieTitle}
-                  />
-
-                  {!selectedMovieSuggestionId &&
-                  movieTitle.trim().length >= 2 &&
-                  (isLoadingSuggestions ||
-                    hasLoadedSuggestions ||
-                    movieSuggestions.length > 0) ? (
-                    <View style={styles.movieSuggestionList}>
-                      {isLoadingSuggestions ? (
-                        <View style={styles.movieSuggestionStatus}>
-                          <ActivityIndicator color="#FF6B00" size="small" />
-                          <Text style={styles.movieSuggestionStatusText}>
-                            Searching…
-                          </Text>
-                        </View>
-                      ) : movieSuggestions.length > 0 ? (
-                        movieSuggestions.map((suggestion, index) => (
-                          <Pressable
-                            accessibilityLabel={`${suggestion.title}, ${suggestion.release_year}`}
-                            accessibilityRole="button"
-                            key={suggestion.movie_id}
-                            onPress={() =>
-                              void handleSelectMovieSuggestion(suggestion)
-                            }
-                            style={({pressed}) => [
-                              styles.movieSuggestionRow,
-                              index > 0 && styles.movieSuggestionRowBorder,
-                              pressed && styles.movieSuggestionRowPressed,
-                            ]}>
-                            <View style={styles.suggestionText}>
-                              <Text
-                                numberOfLines={1}
-                                style={styles.movieSuggestionTitle}>
-                                {suggestion.title}
-                              </Text>
-                              <Text style={styles.movieSuggestionYear}>
-                                {suggestion.release_year}
-                              </Text>
-                            </View>
-                            <Text style={styles.movieSuggestionSceneCount}>
-                              {suggestion.scene_count}{' '}
-                              {suggestion.scene_count === 1
-                                ? 'scene'
-                                : 'scenes'}
-                            </Text>
-                          </Pressable>
-                        ))
-                      ) : (
-                        <View style={styles.movieSuggestionStatus}>
-                          <Text style={styles.movieSuggestionStatusText}>
-                            No matching movies
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : null}
-                </View>
-
-                <Text style={styles.movieDetailsFieldLabel}>Release year</Text>
-                <TextInput
-                  accessibilityLabel="Release year"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  onChangeText={handleReleaseYearChange}
-                  placeholder="e.g. 2010"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.movieDetailsInput}
-                  value={releaseYear}
-                />
-
-                {errorMessage ? (
-                  <Text style={styles.movieDetailsErrorText}>{errorMessage}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.movieDetailsFooter}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleLookup}
-                  style={({pressed}) => [
-                    styles.welcomeButtonShadow,
-                    pressed && styles.welcomeButtonPressed,
-                  ]}>
-                  <LinearGradient
-                    colors={['#FF8A00', '#FF6B00']}
-                    end={{x: 0.5, y: 1}}
-                    start={{x: 0.5, y: 0}}
-                    style={styles.welcomeButton}>
-                    <View style={styles.welcomeButtonInner}>
-                      <Text style={styles.welcomeButtonText}>
-                        {continueLabel}
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setStep('choose_content_type')}
-                  style={({pressed}) => [
-                    styles.movieDetailsFooterBack,
-                    pressed && styles.buttonPressed,
-                  ]}>
-                  <Text style={styles.movieDetailsFooterBackLabel}>Back</Text>
-                </Pressable>
-              </View>
-            </View>
+            <MovieDetailsScreen
+              continueLabel={continueLabel}
+              errorMessage={errorMessage}
+              hasLoadedSuggestions={hasLoadedSuggestions}
+              isLoadingSuggestions={isLoadingSuggestions}
+              movieSuggestions={movieSuggestions}
+              movieTitle={movieTitle}
+              onBack={() => setStep('choose_content_type')}
+              onChangeTitle={handleMovieTitleChange}
+              onChangeYear={handleReleaseYearChange}
+              onContinue={handleLookup}
+              onSelectSuggestion={suggestion => {
+                void handleSelectMovieSuggestion(suggestion);
+              }}
+              releaseYear={releaseYear}
+              selectedMovieSuggestionId={selectedMovieSuggestionId}
+            />
           ) : null}
 
           {isEpisodeIdentify ? (
-            <View style={styles.movieDetailsScreen}>
-              <View style={styles.movieDetailsMain}>
-                <View style={styles.movieDetailsHeader}>
-                  <Pressable
-                    accessibilityLabel="Back"
-                    accessibilityRole="button"
-                    hitSlop={12}
-                    onPress={() => setStep('choose_content_type')}
-                    style={({pressed}) => [
-                      styles.movieDetailsBackIcon,
-                      pressed && styles.buttonPressed,
-                    ]}>
-                    <Ionicons color="#111827" name="chevron-back" size={28} />
-                  </Pressable>
-                  <Text style={styles.movieDetailsTitle}>Episode details</Text>
-                </View>
-
-                <Text style={styles.movieDetailsSubtitle}>
-                  Enter the web series name plus season and episode number.
-                </Text>
-
-                <Text style={styles.movieDetailsFieldLabel}>Series name</Text>
-                <TextInput
-                  accessibilityLabel="Series name"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  onChangeText={setSeriesTitle}
-                  placeholder="e.g. Breaking Bad"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.movieDetailsInput}
-                  value={seriesTitle}
-                />
-
-                <View style={styles.episodeRowInputs}>
-                  <View style={styles.episodeHalfInput}>
-                    <Text style={styles.movieDetailsFieldLabel}>Season</Text>
-                    <TextInput
-                      accessibilityLabel="Season number"
-                      keyboardType="number-pad"
-                      maxLength={3}
-                      onChangeText={setSeasonNumber}
-                      placeholder="1"
-                      placeholderTextColor="#9CA3AF"
-                      style={styles.movieDetailsInput}
-                      value={seasonNumber}
-                    />
-                  </View>
-
-                  <View style={styles.episodeHalfInput}>
-                    <Text style={styles.movieDetailsFieldLabel}>Episode</Text>
-                    <TextInput
-                      accessibilityLabel="Episode number"
-                      keyboardType="number-pad"
-                      maxLength={3}
-                      onChangeText={setEpisodeNumber}
-                      placeholder="3"
-                      placeholderTextColor="#9CA3AF"
-                      style={styles.movieDetailsInput}
-                      value={episodeNumber}
-                    />
-                  </View>
-                </View>
-
-                {errorMessage ? (
-                  <Text style={styles.movieDetailsErrorText}>{errorMessage}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.movieDetailsFooter}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleLookup}
-                  style={({pressed}) => [
-                    styles.welcomeButtonShadow,
-                    pressed && styles.welcomeButtonPressed,
-                  ]}>
-                  <LinearGradient
-                    colors={['#FF8A00', '#FF6B00']}
-                    end={{x: 0.5, y: 1}}
-                    start={{x: 0.5, y: 0}}
-                    style={styles.welcomeButton}>
-                    <View style={styles.welcomeButtonInner}>
-                      <Text style={styles.welcomeButtonText}>
-                        {continueLabel}
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setStep('choose_content_type')}
-                  style={({pressed}) => [
-                    styles.movieDetailsFooterBack,
-                    pressed && styles.buttonPressed,
-                  ]}>
-                  <Text style={styles.movieDetailsFooterBackLabel}>Back</Text>
-                </Pressable>
-              </View>
-            </View>
+            <EpisodeDetailsScreen
+              continueLabel={continueLabel}
+              episodeNumber={episodeNumber}
+              errorMessage={errorMessage}
+              onBack={() => setStep('choose_content_type')}
+              onChangeEpisode={setEpisodeNumber}
+              onChangeSeason={setSeasonNumber}
+              onChangeSeriesTitle={setSeriesTitle}
+              onContinue={handleLookup}
+              seasonNumber={seasonNumber}
+              seriesTitle={seriesTitle}
+            />
           ) : null}
 
-          {step === 'checking' ? (
-            <View style={styles.centeredStep}>
-              <ActivityIndicator color="#3b82f6" size="large" />
-              <Text style={styles.loadingText}>{checkingLabel}</Text>
-            </View>
-          ) : null}
+          {isChecking ? <CheckingScreen label={checkingLabel} /> : null}
 
           {isAlreadyExists ? (
-            <View style={styles.resultScreen}>
-              <Text style={styles.resultTitle}>Already in database</Text>
-              <Text style={styles.resultSubtitle}>
-                {contentLabel} already exists with {existingSceneCount}{' '}
-                {existingSceneCount === 1 ? 'scene' : 'scenes'}. Play with
-                existing cuts or edit them.
-              </Text>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={handlePlayExisting}
-                style={({pressed}) => [
-                  styles.welcomeButtonShadow,
-                  styles.resultPrimaryButton,
-                  pressed && styles.welcomeButtonPressed,
-                ]}>
-                <LinearGradient
-                  colors={['#FF8A00', '#FF6B00']}
-                  end={{x: 0.5, y: 1}}
-                  start={{x: 0.5, y: 0}}
-                  style={styles.welcomeButton}>
-                  <View style={styles.welcomeButtonInner}>
-                    <Text style={styles.welcomeButtonText}>Play</Text>
-                  </View>
-                </LinearGradient>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleEditExisting}
-                style={({pressed}) => [
-                  styles.resultSecondaryButton,
-                  pressed && styles.resultSecondaryButtonPressed,
-                ]}>
-                <Text style={styles.resultSecondaryButtonText}>
-                  Edit cut scenes
-                </Text>
-              </Pressable>
-
-              {errorMessage ? (
-                <Text style={styles.movieDetailsErrorText}>{errorMessage}</Text>
-              ) : null}
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setErrorMessage(null);
-                  setStep('identify');
-                }}
-                style={({pressed}) => [
-                  styles.resultTextButton,
-                  pressed && styles.buttonPressed,
-                ]}>
-                <Text style={styles.resultTextButtonLabel}>
-                  Edit details and try again
-                </Text>
-              </Pressable>
-            </View>
+            <AlreadyExistsScreen
+              contentLabel={contentLabel}
+              errorMessage={errorMessage}
+              existingSceneCount={existingSceneCount}
+              onEditCutScenes={() => {
+                void handleEditExisting();
+              }}
+              onEditDetails={() => {
+                setErrorMessage(null);
+                setStep('identify');
+              }}
+              onPlay={() => {
+                void handlePlayExisting();
+              }}
+            />
           ) : null}
 
-          {step === 'not_found' ? (
-            <>
-              <Text style={styles.title}>{notFoundTitle}</Text>
-              <Text style={styles.subtitle}>{notFoundSubtitle}</Text>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleStartCutSceneEntry}
-                style={({pressed}) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                ]}>
-                <Text style={styles.primaryButtonText}>Add cut scenes</Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={handlePlayWithoutSkips}
-                style={({pressed}) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}>
-                <Text style={styles.secondaryButtonText}>
-                  Play without skipping
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setErrorMessage(null);
-                  setStep('identify');
-                }}
-                style={({pressed}) => [
-                  styles.textButton,
-                  pressed && styles.buttonPressed,
-                ]}>
-                <Text style={styles.textButtonLabel}>Edit details and try again</Text>
-              </Pressable>
-            </>
+          {isNotFound ? (
+            <NotFoundScreen
+              onAddCutScenes={handleStartCutSceneEntry}
+              onEditDetails={() => {
+                setErrorMessage(null);
+                setStep('identify');
+              }}
+              onPlayWithoutSkips={handlePlayWithoutSkips}
+              subtitle={notFoundSubtitle}
+              title={notFoundTitle}
+            />
           ) : null}
 
           {isEditCutScenes ? (
-            <View style={styles.editScenesScreen}>
-              <View style={styles.editScenesMain}>
-                <Text style={styles.editScenesTitle}>{editTitle}</Text>
-                <Text style={styles.editScenesSubtitle}>{editSubtitle}</Text>
-
-                {videoDuration > 0 ? (
-                  <Text style={styles.editScenesDuration}>
-                    Video duration: {formatClockTimestamp(videoDuration)}
-                  </Text>
-                ) : (
-                  <Text style={styles.editScenesDuration}>
-                    Reading video duration…
-                  </Text>
-                )}
-
-                <CutSceneEditor
-                  scenes={sceneDrafts}
-                  onChange={setSceneDrafts}
-                  errorMessage={cutSceneError}
-                />
-              </View>
-
-              <View style={styles.editScenesFooter}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={step === 'saving' || isSaving}
-                  onPress={handleSaveContent}
-                  style={({pressed}) => [
-                    styles.welcomeButtonShadow,
-                    (pressed || step === 'saving' || isSaving) &&
-                      styles.welcomeButtonPressed,
-                  ]}>
-                  <LinearGradient
-                    colors={['#FF8A00', '#FF6B00']}
-                    end={{x: 0.5, y: 1}}
-                    start={{x: 0.5, y: 0}}
-                    style={styles.welcomeButton}>
-                    <View style={styles.welcomeButtonInner}>
-                      {step === 'saving' || isSaving ? (
-                        <ActivityIndicator color="#ffffff" />
-                      ) : (
-                        <Text style={styles.welcomeButtonText}>
-                          {saveLabel}
-                        </Text>
-                      )}
-                    </View>
-                  </LinearGradient>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={step === 'saving'}
-                  onPress={handleEditBack}
-                  style={({pressed}) => [
-                    styles.movieDetailsFooterBack,
-                    pressed && styles.buttonPressed,
-                  ]}>
-                  <Text style={styles.movieDetailsFooterBackLabel}>Back</Text>
-                </Pressable>
-              </View>
-            </View>
+            <EditCutScenesScreen
+              cutSceneError={cutSceneError}
+              isSaving={step === 'saving' || isSaving}
+              onBack={handleEditBack}
+              onChangeDrafts={setSceneDrafts}
+              onSave={() => {
+                void handleSaveContent();
+              }}
+              saveLabel={saveLabel}
+              sceneDrafts={sceneDrafts}
+              subtitle={editSubtitle}
+              title={editTitle}
+              videoDuration={videoDuration}
+            />
           ) : null}
         </ScrollView>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#0f1115',
-    flex: 1,
-  },
-  containerWelcome: {
-    backgroundColor: '#ffffff',
-  },
-  containerContentType: {
-    backgroundColor: '#F8F9FB',
-  },
-  containerMovieDetails: {
-    backgroundColor: '#ffffff',
-  },
-  containerEditScenes: {
-    backgroundColor: '#F8F9FB',
-  },
-  containerPlaying: {
-    backgroundColor: '#000000',
-  },
-  hiddenVideo: {
-    height: 0,
-    opacity: 0,
-    position: 'absolute',
-    width: 0,
-  },
-  setupScrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    gap: 14,
-  },
-  scrollContentWelcome: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  scrollContentContentType: {
-    justifyContent: 'flex-start',
-    paddingBottom: 12,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-  },
-  scrollContentMovieDetails: {
-    justifyContent: 'flex-start',
-    paddingBottom: 8,
-    paddingHorizontal: 24,
-    paddingTop: 8,
-  },
-  scrollContentResult: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  scrollContentEditScenes: {
-    justifyContent: 'flex-start',
-    paddingBottom: 8,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  scrollContentLandscape: {
-    justifyContent: 'flex-start',
-    paddingVertical: 16,
-  },
-  welcomeContent: {
-    alignItems: 'center',
-    gap: 16,
-    maxWidth: 420,
-    width: '100%',
-  },
-  welcomeTitle: {
-    color: '#111827',
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    color: '#6B7280',
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  welcomeButtonShadow: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#FF6B00',
-        shadowOffset: {width: 0, height: 10},
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 8,
-      },
-      default: {},
-    }),
-    alignSelf: 'stretch',
-    borderRadius: 28,
-  },
-  welcomeButton: {
-    borderRadius: 28,
-    height: 56,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  welcomeButtonInner: {
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    width: '100%',
-  },
-  welcomeButtonPressed: {
-    opacity: 0.88,
-  },
-  welcomeButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
-    includeFontPadding: false,
-    lineHeight: 22,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-  },
-  welcomeErrorText: {
-    color: '#DC2626',
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  contentTypeScreen: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  contentTypeMain: {
-    gap: 12,
-    width: '100%',
-  },
-  contentTypeTitle: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  contentTypeSubtitle: {
-    color: '#6B7280',
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  contentTypeCard: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0F172A',
-        shadowOffset: {width: 0, height: 4},
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 2,
-      },
-      default: {},
-    }),
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderColor: '#EEF0F3',
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-  },
-  contentTypeCardPressed: {
-    opacity: 0.9,
-  },
-  contentTypeIconWrap: {
-    alignItems: 'center',
-    borderRadius: 12,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  contentTypeIconMovie: {
-    backgroundColor: '#FFE8D6',
-  },
-  contentTypeIconSeries: {
-    backgroundColor: '#EDE4FF',
-  },
-  contentTypeCardText: {
-    flex: 1,
-    gap: 4,
-  },
-  contentTypeCardTitle: {
-    color: '#111827',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  contentTypeCardHint: {
-    color: '#6B7280',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  contentTypeFooterButton: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  contentTypeFooterLabel: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  movieDetailsScreen: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  movieDetailsMain: {
-    gap: 10,
-    width: '100%',
-  },
-  movieDetailsHeader: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    marginBottom: 8,
-  },
-  movieDetailsBackIcon: {
-    left: -8,
-    padding: 4,
-    position: 'absolute',
-    zIndex: 1,
-  },
-  movieDetailsTitle: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
-  movieDetailsSubtitle: {
-    color: '#6B7280',
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 18,
-    textAlign: 'center',
-  },
-  movieDetailsFieldLabel: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
-    marginTop: 6,
-  },
-  movieDetailsInput: {
-    backgroundColor: '#ffffff',
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    borderWidth: 1,
-    color: '#111827',
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  movieSuggestionList: {
-    backgroundColor: '#ffffff',
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: 6,
-    overflow: 'hidden',
-  },
-  movieSuggestionRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  movieSuggestionRowBorder: {
-    borderTopColor: '#EEF0F3',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  movieSuggestionRowPressed: {
-    backgroundColor: '#F9FAFB',
-  },
-  movieSuggestionTitle: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  movieSuggestionYear: {
-    color: '#6B7280',
-    fontSize: 13,
-  },
-  movieSuggestionSceneCount: {
-    color: '#FF6B00',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  movieSuggestionStatus: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 14,
-  },
-  movieSuggestionStatusText: {
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  movieDetailsErrorText: {
-    color: '#DC2626',
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  movieDetailsFooter: {
-    gap: 4,
-    marginTop: 28,
-    width: '100%',
-  },
-  movieDetailsFooterBack: {
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  movieDetailsFooterBackLabel: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  episodeRowInputs: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 2,
-  },
-  episodeHalfInput: {
-    flex: 1,
-  },
-  resultScreen: {
-    alignItems: 'center',
-    gap: 14,
-    maxWidth: 420,
-    width: '100%',
-  },
-  resultTitle: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
-  resultSubtitle: {
-    color: '#6B7280',
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  resultPrimaryButton: {
-    marginTop: 4,
-  },
-  resultSecondaryButton: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    backgroundColor: '#ffffff',
-    borderColor: '#E5E7EB',
-    borderRadius: 28,
-    borderWidth: 1,
-    height: 56,
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  resultSecondaryButtonPressed: {
-    backgroundColor: '#F9FAFB',
-  },
-  resultSecondaryButtonText: {
-    color: '#111827',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  resultTextButton: {
-    alignItems: 'center',
-    marginTop: 4,
-    paddingVertical: 10,
-  },
-  resultTextButtonLabel: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  editScenesScreen: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  editScenesMain: {
-    gap: 12,
-    width: '100%',
-  },
-  editScenesTitle: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
-  editScenesSubtitle: {
-    color: '#6B7280',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  editScenesDuration: {
-    color: '#9CA3AF',
-    fontFamily: Platform.select({ios: 'Menlo', android: 'monospace'}),
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  editScenesFooter: {
-    gap: 4,
-    marginTop: 24,
-    width: '100%',
-  },
-  centeredStep: {
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 48,
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 26,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: '#b8bec8',
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  fieldLabel: {
-    color: '#d1d5db',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: '#1a1f27',
-    borderColor: '#3a3f4b',
-    borderRadius: 10,
-    borderWidth: 1,
-    color: '#ffffff',
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  movieSearchField: {
-    zIndex: 2,
-  },
-  suggestionList: {
-    backgroundColor: '#1a1f27',
-    borderColor: '#3a3f4b',
-    borderRadius: 10,
-    borderWidth: 1,
-    marginTop: 6,
-    overflow: 'hidden',
-  },
-  suggestionRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  suggestionRowBorder: {
-    borderTopColor: '#303642',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  suggestionRowPressed: {
-    backgroundColor: '#252c37',
-  },
-  suggestionText: {
-    flex: 1,
-    gap: 2,
-  },
-  suggestionTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  suggestionYear: {
-    color: '#9ca3af',
-    fontSize: 13,
-  },
-  suggestionSceneCount: {
-    color: '#93c5fd',
-    fontSize: 12,
-  },
-  suggestionStatus: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 14,
-  },
-  suggestionStatusText: {
-    color: '#9ca3af',
-    fontSize: 14,
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfInput: {
-    flex: 1,
-    gap: 6,
-  },
-  previewId: {
-    color: '#6b7280',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    minWidth: 220,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  primaryButtonPressed: {
-    opacity: 0.85,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderColor: '#3b82f6',
-    borderRadius: 10,
-    borderWidth: 1,
-    minWidth: 220,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  secondaryButtonPressed: {
-    opacity: 0.85,
-  },
-  secondaryButtonText: {
-    color: '#93c5fd',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  textButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  textButtonLabel: {
-    color: '#9ca3af',
-    fontSize: 14,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  errorText: {
-    color: '#f87171',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  loadingText: {
-    color: '#b8bec8',
-    fontSize: 15,
-    textAlign: 'center',
-  },
-});

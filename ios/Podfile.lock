@@ -1,4 +1,6 @@
 PODS:
+  - BVLinearGradient (2.8.3):
+    - React-Core
   - FBLazyVector (0.86.0)
   - hermes-engine (250829098.0.14):
     - hermes-engine/Pre-built (= 250829098.0.14)
@@ -1450,6 +1452,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-keyevent (0.3.2):
+    - React
   - react-native-orientation-locker (1.7.0):
     - React-Core
   - react-native-safe-area-context (5.8.0):
@@ -2042,6 +2046,7 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
+  - BVLinearGradient (from `../node_modules/react-native-linear-gradient`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -2083,6 +2088,7 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
+  - react-native-keyevent (from `../node_modules/react-native-keyevent`)
   - react-native-orientation-locker (from `../node_modules/react-native-orientation-locker`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
@@ -2133,6 +2139,8 @@ SPEC REPOS:
     - Mute
 
 EXTERNAL SOURCES:
+  BVLinearGradient:
+    :path: "../node_modules/react-native-linear-gradient"
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
   hermes-engine:
@@ -2214,6 +2222,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
   react-native-document-picker:
     :path: "../node_modules/@react-native-documents/picker"
+  react-native-keyevent:
+    :path: "../node_modules/react-native-keyevent"
   react-native-orientation-locker:
     :path: "../node_modules/react-native-orientation-locker"
   react-native-safe-area-context:
@@ -2302,6 +2312,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  BVLinearGradient: 880f91a7854faff2df62518f0281afb1c60d49a3
   FBLazyVector: b3e7ad108f0d882e30445c5527d774e3fd432f3d
   hermes-engine: 22d36b1069b3331ccd4428068808524e77acdbaa
   MobileVLCKit: 73d7ddb52238b6885b70b0f281cae75a0a6e3ac0
@@ -2344,6 +2355,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 03752e60738a797bb49f4d6cb0291dfa398099b8
   React-mutationobservernativemodule: 2e568e13c98bd185fe83266795233fa7ad2cbc19
   react-native-document-picker: 1bf3e97a53c205191d34bc3a9bbcb57fbe1c77d5
+  react-native-keyevent: 0babd7e275086da5386d831211e3283b624dc0b5
   react-native-orientation-locker: 5819fd23ca89cbac0d736fb4314745f62716d517
   react-native-safe-area-context: c1eb308f4b36372a4de4b3bdaa8ed695ec3dd461
   react-native-slider: 8824cf332b11bf5149f6576c8c8b32b4f93f82ac

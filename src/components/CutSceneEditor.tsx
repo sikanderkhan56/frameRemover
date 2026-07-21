@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import {Ionicons} from '@react-native-vector-icons/ionicons';
+import {Ionicons} from '@react-native-vector-icons/ionicons/static';
 import {
   SKIP_REASONS,
   getSkipReasonLabel,
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(15, 23, 42, 0.35)',
   },
   sheetCard: {

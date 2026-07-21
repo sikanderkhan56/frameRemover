@@ -1,5 +1,7 @@
 import Slider from '@react-native-community/slider';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Ionicons} from '@react-native-vector-icons/ionicons/static';
+import {playerTheme as theme} from '../theme/playerTheme';
 import {formatTimestamp} from '../utils/frameSkip';
 import {VolumeControl} from './VolumeControl';
 
@@ -56,7 +58,7 @@ export function VideoControls({
 
   return (
     <View
-      style={[styles.root, {paddingBottom: Math.max(bottomInset, 8)}]}
+      style={[styles.root, {paddingBottom: Math.max(bottomInset, 10)}]}
       pointerEvents="box-none">
       <View style={styles.scrim} pointerEvents="none" />
 
@@ -70,8 +72,8 @@ export function VideoControls({
               styles.centerButton,
               pressed && styles.pressed,
             ]}>
-            <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
-            <Text style={styles.skipLabel}>sec</Text>
+            <Ionicons color={theme.white} name="play-back" size={22} />
+            <Text style={styles.skipBadge}>{SKIP_SECONDS}</Text>
           </Pressable>
 
           <Pressable
@@ -82,7 +84,12 @@ export function VideoControls({
               styles.playButton,
               pressed && styles.pressed,
             ]}>
-            <Text style={styles.playButtonText}>{paused ? '▶' : '❚❚'}</Text>
+            <Ionicons
+              color={theme.white}
+              name={paused ? 'play' : 'pause'}
+              size={28}
+              style={paused ? styles.playIconOffset : undefined}
+            />
           </Pressable>
 
           <Pressable
@@ -93,8 +100,8 @@ export function VideoControls({
               styles.centerButton,
               pressed && styles.pressed,
             ]}>
-            <Text style={styles.skipText}>{SKIP_SECONDS}</Text>
-            <Text style={styles.skipLabel}>sec</Text>
+            <Ionicons color={theme.white} name="play-forward" size={22} />
+            <Text style={styles.skipBadge}>{SKIP_SECONDS}</Text>
           </Pressable>
         </View>
       </View>
@@ -112,7 +119,7 @@ export function VideoControls({
             minimumTrackTintColor="transparent"
             maximumTrackTintColor="transparent"
             thumbImage={SLIDER_THUMB}
-            thumbTintColor="#ffffff"
+            thumbTintColor={theme.orange}
             onSlidingStart={onScrubStart}
             onValueChange={value => onScrubChange(value * duration)}
             onSlidingComplete={value => onScrubComplete(value * duration)}
@@ -137,9 +144,11 @@ export function VideoControls({
                 styles.cornerButton,
                 pressed && styles.pressed,
               ]}>
-              <Text style={styles.cornerButtonIcon}>
-                {isFillMode ? '▣' : '⇱'}
-              </Text>
+              <Ionicons
+                color={theme.white}
+                name={isFillMode ? 'contract-outline' : 'expand-outline'}
+                size={20}
+              />
             </Pressable>
 
             <Pressable
@@ -152,9 +161,13 @@ export function VideoControls({
                 styles.cornerButton,
                 pressed && styles.pressed,
               ]}>
-              <Text style={styles.cornerButtonIcon}>
-                {isFullscreen ? '⤡' : '⤢'}
-              </Text>
+              <Ionicons
+                color={theme.white}
+                name={
+                  isFullscreen ? 'close-outline' : 'tablet-landscape-outline'
+                }
+                size={22}
+              />
             </Pressable>
           </View>
         </View>
@@ -173,7 +186,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: theme.scrim,
   },
   centerArea: {
     ...StyleSheet.absoluteFill,
@@ -182,47 +195,36 @@ const styles = StyleSheet.create({
   centerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 24,
+    gap: 28,
     justifyContent: 'center',
   },
   centerButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    borderColor: 'rgba(229, 9, 20, 0.75)',
-    borderRadius: 25,
-    borderWidth: 1,
-    height: 50,
+    backgroundColor: theme.glass,
+    borderRadius: 28,
+    height: 56,
     justifyContent: 'center',
-    width: 50,
+    width: 56,
   },
-  skipText: {
-    color: '#ffffff',
-    fontSize: 15,
+  skipBadge: {
+    color: theme.white,
+    fontSize: 10,
     fontWeight: '700',
-  },
-  skipLabel: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: -2,
+    marginTop: 1,
   },
   playButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderColor: '#e50914',
-    borderRadius: 25,
-    borderWidth: 1,
-    height: 50,
+    backgroundColor: theme.orange,
+    borderRadius: 34,
+    height: 68,
     justifyContent: 'center',
-    width: 50,
+    width: 68,
   },
-  playButtonText: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
+  playIconOffset: {
+    marginLeft: 3,
   },
   bottomArea: {
-    gap: 2,
+    gap: 4,
     width: '100%',
     zIndex: 4,
   },
@@ -234,16 +236,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   progressTrack: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    height: 3,
+    backgroundColor: theme.track,
+    borderRadius: 999,
+    height: 4,
     left: 16,
     overflow: 'hidden',
     position: 'absolute',
     right: 16,
   },
   progressFill: {
-    backgroundColor: '#e50914',
-    height: 3,
+    backgroundColor: theme.orange,
+    borderRadius: 999,
+    height: 4,
   },
   progressSlider: {
     height: 22,
@@ -253,35 +257,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
+    paddingBottom: 6,
     paddingHorizontal: 16,
-    paddingBottom: 4,
   },
   cornerButtonGroup: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginLeft: 'auto',
   },
   cornerButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: theme.glass,
     borderRadius: 22,
     height: 44,
     justifyContent: 'center',
     width: 44,
   },
-  cornerButtonIcon: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '600',
-  },
   timeText: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.95)',
     flexShrink: 1,
     fontSize: 13,
     fontVariant: ['tabular-nums'],
+    fontWeight: '600',
   },
   pressed: {
-    opacity: 0.75,
+    opacity: 0.8,
   },
 });

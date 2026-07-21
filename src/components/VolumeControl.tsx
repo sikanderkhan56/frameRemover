@@ -1,6 +1,8 @@
 import Slider from '@react-native-community/slider';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Animated, Pressable, StyleSheet, View} from 'react-native';
+import {Ionicons} from '@react-native-vector-icons/ionicons/static';
+import {playerTheme as theme} from '../theme/playerTheme';
 
 type VolumeControlProps = {
   volume: number;
@@ -8,21 +10,20 @@ type VolumeControlProps = {
 };
 
 const COLLAPSED_WIDTH = 44;
-const EXPANDED_WIDTH = 120;
+const EXPANDED_WIDTH = 128;
 const AUTO_HIDE_MS = 3000;
 
-function SpeakerIcon({volume}: {volume: number}) {
-  const isMuted = volume === 0;
-
-  return (
-    <View style={styles.speaker}>
-      <View style={styles.speakerBody} />
-      <View style={styles.speakerCone} />
-      {!isMuted && volume >= 0.35 ? <View style={styles.waveOuter} /> : null}
-      {!isMuted && volume >= 0.65 ? <View style={styles.waveInner} /> : null}
-      {isMuted ? <View style={styles.muteSlash} /> : null}
-    </View>
-  );
+function volumeIconName(volume: number): 'volume-mute' | 'volume-low' | 'volume-medium' | 'volume-high' {
+  if (volume === 0) {
+    return 'volume-mute';
+  }
+  if (volume < 0.35) {
+    return 'volume-low';
+  }
+  if (volume < 0.7) {
+    return 'volume-medium';
+  }
+  return 'volume-high';
 }
 
 export function VolumeControl({volume, onVolumeChange}: VolumeControlProps) {
@@ -104,7 +105,11 @@ export function VolumeControl({volume, onVolumeChange}: VolumeControlProps) {
         hitSlop={6}
         onPress={onIconPress}
         style={({pressed}) => [styles.button, pressed && styles.pressed]}>
-        <SpeakerIcon volume={volume} />
+        <Ionicons
+          color={theme.white}
+          name={volumeIconName(volume)}
+          size={20}
+        />
       </Pressable>
 
       <Animated.View
@@ -116,9 +121,9 @@ export function VolumeControl({volume, onVolumeChange}: VolumeControlProps) {
           minimumValue={0}
           maximumValue={1}
           value={volume}
-          minimumTrackTintColor="#ef4444"
+          minimumTrackTintColor={theme.orange}
           maximumTrackTintColor="rgba(255,255,255,0.35)"
-          thumbTintColor="#ffffff"
+          thumbTintColor={theme.white}
           onSlidingStart={clearAutoHide}
           onSlidingComplete={scheduleAutoHide}
           onValueChange={value => {
@@ -133,12 +138,10 @@ export function VolumeControl({volume, onVolumeChange}: VolumeControlProps) {
   );
 }
 
-const ICON_COLOR = '#ffffff';
-
 const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: theme.glass,
     borderRadius: 22,
     flexDirection: 'row',
     height: 44,
@@ -160,53 +163,6 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 28,
-  },
-  speaker: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 14,
-    width: 18,
-  },
-  speakerBody: {
-    backgroundColor: ICON_COLOR,
-    height: 8,
-    width: 3,
-  },
-  speakerCone: {
-    borderBottomColor: 'transparent',
-    borderBottomWidth: 4,
-    borderRightColor: ICON_COLOR,
-    borderRightWidth: 6,
-    borderTopColor: 'transparent',
-    borderTopWidth: 4,
-    height: 0,
-    marginLeft: 1,
-    width: 0,
-  },
-  waveOuter: {
-    borderColor: ICON_COLOR,
-    borderRadius: 5,
-    borderWidth: 1,
-    height: 7,
-    marginLeft: 1,
-    transform: [{rotate: '-45deg'}],
-    width: 7,
-  },
-  waveInner: {
-    borderColor: ICON_COLOR,
-    borderRadius: 4,
-    borderWidth: 1,
-    height: 5,
-    marginLeft: -3,
-    transform: [{rotate: '-45deg'}],
-    width: 5,
-  },
-  muteSlash: {
-    backgroundColor: ICON_COLOR,
-    height: 12,
-    marginLeft: -6,
-    transform: [{rotate: '-45deg'}],
-    width: 1.5,
   },
   pressed: {
     opacity: 0.75,

@@ -1,0 +1,18 @@
+export const playerTheme = {
+  pageBg: '#F8F9FB',
+  cardBg: '#ffffff',
+  cardBorder: '#EEF0F3',
+  text: '#111827',
+  textMuted: '#6B7280',
+  textSoft: '#9CA3AF',
+  orange: '#FF6B00',
+  orangeLight: '#FF8A00',
+  orangeSoft: '#FFE8D6',
+  purpleSoft: '#EDE4FF',
+  purple: '#7C3AED',
+  track: 'rgba(255,255,255,0.35)',
+  glass: 'rgba(17, 24, 39, 0.55)',
+  glassStrong: 'rgba(17, 24, 39, 0.72)',
+  scrim: 'rgba(15, 23, 42, 0.28)',
+  white: '#ffffff',
+} as const;
