@@ -46,6 +46,7 @@ type AppVideoSurfaceProps = {
   style?: StyleProp<ViewStyle>;
   resizeMode?: 'contain' | 'cover' | 'stretch' | 'none';
   hidden?: boolean;
+  muted?: boolean;
   onLoad?: (data: PlayerLoadData) => void;
   onProgress?: (data: PlayerProgressData) => void;
   onSeek?: (data: {currentTime: number}) => void;
@@ -61,6 +62,7 @@ function AppVideoSurfaceInner(
     style,
     resizeMode = 'contain',
     hidden = false,
+    muted = false,
     onLoad,
     onProgress,
     onSeek,
@@ -111,6 +113,7 @@ function AppVideoSurfaceInner(
           if (duration > 0) {
             vlcRef.current?.seek(Math.min(1, clamped / duration));
           }
+          // If duration isn't ready yet, onLoad/onProgress will apply lastSeekSecondsRef.
           return;
         }
 
@@ -230,9 +233,12 @@ function AppVideoSurfaceInner(
         source={vlcSource}
         style={style}
         paused={paused}
-        autoplay={!paused}
+        // Keep autoplay stable — flipping it with `paused` can blank the
+        // surface on resume (common with MobileVLCKit / MKV).
+        autoplay
         resizeMode={resizeMode === 'stretch' ? 'fill' : resizeMode}
-        volume={100}
+        muted={muted}
+        volume={muted ? 0 : 100}
         onBuffering={handleVlcBuffering}
         onPlaying={markReady}
         onLoad={info => {
@@ -246,12 +252,20 @@ function AppVideoSurfaceInner(
             naturalSize:
               width > 0 && height > 0 ? {width, height} : undefined,
           });
+          const pendingSeek = lastSeekSecondsRef.current;
+          if (pendingSeek !== null && duration > 0) {
+            vlcRef.current?.seek(Math.min(1, pendingSeek / duration));
+          }
         }}
         onProgress={event => {
           const duration = normalizeVlcSeconds(event.duration);
           const currentTime = normalizeVlcSeconds(event.currentTime);
           if (duration > 0) {
             durationRef.current = duration;
+          }
+          // Progress while playing means the surface has frames again.
+          if (!paused && currentTime > 0) {
+            markReady();
           }
           emitThrottledProgress(currentTime);
         }}
@@ -270,7 +284,8 @@ function AppVideoSurfaceInner(
       style={style}
       resizeMode={resizeMode}
       paused={paused}
-      volume={1}
+      muted={muted}
+      volume={muted ? 0 : 1}
       controls={false}
       progressUpdateInterval={250}
       onLoadStart={() => setLoading(true)}

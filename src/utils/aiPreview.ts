@@ -8,6 +8,8 @@ import {secondsToTimeFields} from './cutSceneDrafts';
 import {parseTimeInput} from './time';
 
 const AI_CATEGORY_TO_REASON: Record<string, SkipReason> = {
+  Violence: 'violence',
+  Language: 'language',
   Kissing: 'other',
   'Sexual Content': 'sexual_content',
   Nudity: 'sexual_content',
@@ -17,7 +19,32 @@ const AI_CATEGORY_TO_REASON: Record<string, SkipReason> = {
 export function mapAiCategoryToReason(
   category: AiCategory | string,
 ): SkipReason {
-  return AI_CATEGORY_TO_REASON[category] ?? 'other';
+  const trimmed = category.trim();
+  if (!trimmed) {
+    return 'other';
+  }
+
+  const direct = AI_CATEGORY_TO_REASON[trimmed];
+  if (direct) {
+    return direct;
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('violence') || lower.includes('gore')) {
+    return 'violence';
+  }
+  if (lower.includes('language') || lower.includes('profan')) {
+    return 'language';
+  }
+  if (
+    lower.includes('sexual') ||
+    lower.includes('nudity') ||
+    lower.includes('nude')
+  ) {
+    return 'sexual_content';
+  }
+
+  return 'other';
 }
 
 /**

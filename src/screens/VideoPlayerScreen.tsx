@@ -51,7 +51,6 @@ import type {
   SeekablePlayerHandle,
 } from '../types/player';
 import {getApiErrorDetail, isFetchBaseQueryError} from '../utils/apiErrors';
-import {estimatedSceneToDraft} from '../utils/aiPreview';
 import {cutScenesToDrafts} from '../utils/cutSceneDrafts';
 import {
   buildEpisodeIdPreview,
@@ -61,6 +60,7 @@ import {
   parseReleaseYear,
 } from '../utils/contentId';
 import {draftsToCutScenes} from '../utils/cutSceneValidation';
+import {cutScenesToApiPayload} from '../utils/cutSceneApi';
 import {formatTimestamp} from '../utils/frameSkip';
 import {cutScenesToSkipIntervals} from '../utils/movieMappers';
 import {AlreadyExistsScreen} from './AlreadyExistsScreen';
@@ -104,6 +104,7 @@ export function VideoPlayerScreen() {
   const [existingSceneCount, setExistingSceneCount] = useState(0);
 
   const [videoDuration, setVideoDuration] = useState(0);
+  const [sceneReviewOpen, setSceneReviewOpen] = useState(false);
   const [cutScenes, setCutScenes] = useState<CutScene[]>([]);
   const [sceneDrafts, setSceneDrafts] = useState<CutSceneDraft[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<EstimatedScene[]>([]);
@@ -251,6 +252,7 @@ export function VideoPlayerScreen() {
     setIsLoadingAiSuggestions(false);
     setErrorMessage(null);
     setCutSceneError(null);
+    setSceneReviewOpen(false);
     setPaused(false);
     setDuration(0);
     setCurrentTime(0);
@@ -558,8 +560,37 @@ export function VideoPlayerScreen() {
     }
   }, [loadFullContent]);
 
+  const fetchMovieAiSuggestions = useCallback(
+    async (movieId: string, title: string, year: number) => {
+      setIsLoadingAiSuggestions(true);
+      setAiSuggestions([]);
+      setAiPreviewMessage(null);
+
+      try {
+        const preview = await forceMovieAiPreview({
+          movieId,
+          title,
+          release_year: year,
+        }).unwrap();
+
+        setAiSuggestions(preview.estimated_scenes ?? []);
+        setAiPreviewMessage(preview.message ?? null);
+      } catch (error) {
+        setAiSuggestions([]);
+        setAiPreviewMessage(
+          getApiErrorDetail(error) ??
+            'Could not load AI scene suggestions. You can still add scenes manually.',
+        );
+      } finally {
+        setIsLoadingAiSuggestions(false);
+      }
+    },
+    [forceMovieAiPreview],
+  );
+
   const handleEditExisting = useCallback(async () => {
     setCutSceneError(null);
+    setErrorMessage(null);
     setAiSuggestions([]);
     setAiPreviewMessage(null);
     setIsLoadingAiSuggestions(false);
@@ -570,6 +601,20 @@ export function VideoPlayerScreen() {
       setSceneDrafts(cutScenesToDrafts(scenes));
       setSceneEditMode('update');
       setStep('edit_cut_scenes');
+
+      if (contentType === 'movie') {
+        const trimmedTitle = movieTitle.trim();
+        const yearResult = parseReleaseYear(releaseYear);
+        if (trimmedTitle && yearResult.value !== null) {
+          const movieId =
+            contentId || buildMovieId(trimmedTitle, yearResult.value);
+          void fetchMovieAiSuggestions(
+            movieId,
+            trimmedTitle,
+            yearResult.value,
+          );
+        }
+      }
     } catch (error) {
       if (isFetchBaseQueryError(error) && error.status === 'FETCH_ERROR') {
         setErrorMessage('Cannot reach the API. Check that the backend is running.');
@@ -578,7 +623,14 @@ export function VideoPlayerScreen() {
       }
       setStep('already_exists');
     }
-  }, [loadFullContent]);
+  }, [
+    contentId,
+    contentType,
+    fetchMovieAiSuggestions,
+    loadFullContent,
+    movieTitle,
+    releaseYear,
+  ]);
 
   const handlePlayWithoutSkips = useCallback(() => {
     if (contentType === 'movie') {
@@ -622,34 +674,6 @@ export function VideoPlayerScreen() {
     seasonNumber,
     seriesTitle,
   ]);
-
-  const fetchMovieAiSuggestions = useCallback(
-    async (movieId: string, title: string, year: number) => {
-      setIsLoadingAiSuggestions(true);
-      setAiSuggestions([]);
-      setAiPreviewMessage(null);
-
-      try {
-        const preview = await forceMovieAiPreview({
-          movieId,
-          title,
-          release_year: year,
-        }).unwrap();
-
-        setAiSuggestions(preview.estimated_scenes ?? []);
-        setAiPreviewMessage(preview.message ?? null);
-      } catch (error) {
-        setAiSuggestions([]);
-        setAiPreviewMessage(
-          getApiErrorDetail(error) ??
-            'Could not load AI scene suggestions. You can still add scenes manually.',
-        );
-      } finally {
-        setIsLoadingAiSuggestions(false);
-      }
-    },
-    [forceMovieAiPreview],
-  );
 
   const handleStartCutSceneEntry = useCallback(() => {
     setCutSceneError(null);
@@ -706,18 +730,11 @@ export function VideoPlayerScreen() {
     releaseYear,
   ]);
 
-  const handleUseAiSuggestion = useCallback(
+  const handleAiSuggestionOpenFailed = useCallback(
     (scene: EstimatedScene) => {
-      const draft = estimatedSceneToDraft(scene);
-      if (!draft) {
-        setCutSceneError(
-          `Could not parse AI time "${scene.estimated_time}". Add this scene manually.`,
-        );
-        return;
-      }
-
-      setCutSceneError(null);
-      setSceneDrafts(current => [...current, draft]);
+      setCutSceneError(
+        `Could not parse AI time "${scene.estimated_time}". Add this scene manually.`,
+      );
     },
     [],
   );
@@ -742,6 +759,8 @@ export function VideoPlayerScreen() {
       return;
     }
 
+    const apiCutScenes = cutScenesToApiPayload(parsedScenes);
+
     setStep('saving');
 
     try {
@@ -761,7 +780,7 @@ export function VideoPlayerScreen() {
               title: trimmedTitle,
               release_year: yearResult.value,
               duration: videoDuration,
-              cut_scenes: parsedScenes,
+              cut_scenes: apiCutScenes,
             },
           }).unwrap();
 
@@ -776,7 +795,7 @@ export function VideoPlayerScreen() {
           title: trimmedTitle,
           release_year: yearResult.value,
           duration: videoDuration,
-          cut_scenes: parsedScenes,
+          cut_scenes: apiCutScenes,
         }).unwrap();
 
         setContentId(response.id);
@@ -810,7 +829,7 @@ export function VideoPlayerScreen() {
             season_number: seasonResult.value,
             episode_number: episodeResult.value,
             duration: videoDuration,
-            cut_scenes: parsedScenes,
+            cut_scenes: apiCutScenes,
           },
         }).unwrap();
 
@@ -825,7 +844,7 @@ export function VideoPlayerScreen() {
         season_number: seasonResult.value,
         episode_number: episodeResult.value,
         duration: videoDuration,
-        cut_scenes: parsedScenes,
+        cut_scenes: apiCutScenes,
       }).unwrap();
 
       setContentId(response.id);
@@ -933,6 +952,7 @@ export function VideoPlayerScreen() {
 
   const handleEditBack = useCallback(() => {
     setCutSceneError(null);
+    setSceneReviewOpen(false);
     setStep(sceneEditMode === 'update' ? 'already_exists' : 'not_found');
   }, [sceneEditMode]);
 
@@ -981,7 +1001,7 @@ export function VideoPlayerScreen() {
         backgroundColor={statusBarBackground}
       />
 
-      {videoUri && isSetupStep ? (
+      {videoUri && isSetupStep && !sceneReviewOpen ? (
         <AppVideoSurface
           uri={videoUri}
           fileName={videoFileName}
@@ -1130,45 +1150,44 @@ export function VideoPlayerScreen() {
             />
           ) : null}
 
-          {isEditCutScenes ? (
+          {isEditCutScenes && videoUri ? (
             <EditCutScenesScreen
-              aiMessage={
-                sceneEditMode === 'create' && contentType === 'movie'
-                  ? aiPreviewMessage
-                  : null
-              }
-              aiSuggestions={
-                sceneEditMode === 'create' && contentType === 'movie'
-                  ? aiSuggestions
-                  : []
-              }
+              aiMessage={contentType === 'movie' ? aiPreviewMessage : null}
+              aiSuggestions={contentType === 'movie' ? aiSuggestions : []}
               cutSceneError={cutSceneError}
               isLoadingAiSuggestions={
-                sceneEditMode === 'create' &&
-                contentType === 'movie' &&
-                isLoadingAiSuggestions
+                contentType === 'movie' && isLoadingAiSuggestions
               }
               isSaving={step === 'saving' || isSaving}
+              onAiSuggestionOpenFailed={
+                contentType === 'movie'
+                  ? handleAiSuggestionOpenFailed
+                  : undefined
+              }
+              onClearCutSceneError={() => setCutSceneError(null)}
+              onReviewSheetVisibilityChange={setSceneReviewOpen}
+              onDurationDetected={seconds => {
+                if (seconds > 0) {
+                  setVideoDuration(current => (current > 0 ? current : seconds));
+                }
+              }}
               onBack={handleEditBack}
               onChangeDrafts={setSceneDrafts}
               onRefreshAiSuggestions={
-                sceneEditMode === 'create' && contentType === 'movie'
+                contentType === 'movie'
                   ? handleRefreshAiSuggestions
                   : undefined
               }
               onSave={() => {
                 void handleSaveContent();
               }}
-              onUseAiSuggestion={
-                sceneEditMode === 'create' && contentType === 'movie'
-                  ? handleUseAiSuggestion
-                  : undefined
-              }
               saveLabel={saveLabel}
               sceneDrafts={sceneDrafts}
               subtitle={editSubtitle}
               title={editTitle}
               videoDuration={videoDuration}
+              videoFileName={videoFileName}
+              videoUri={videoUri}
             />
           ) : null}
         </ScrollView>

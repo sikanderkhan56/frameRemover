@@ -1,5 +1,9 @@
+import {useCallback, useRef} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
-import {CutSceneEditor} from '../components/CutSceneEditor';
+import {
+  CutSceneEditor,
+  type CutSceneEditorHandle,
+} from '../components/CutSceneEditor';
 import {
   OrangeButton,
   TextLinkButton,
@@ -14,6 +18,8 @@ import {setupStyles as styles} from '../theme/setupStyles';
 type EditCutScenesScreenProps = {
   title: string;
   subtitle: string;
+  videoUri: string;
+  videoFileName?: string;
   videoDuration: number;
   sceneDrafts: CutSceneDraft[];
   cutSceneError: string | null;
@@ -22,7 +28,10 @@ type EditCutScenesScreenProps = {
   aiSuggestions?: EstimatedScene[];
   aiMessage?: string | null;
   isLoadingAiSuggestions?: boolean;
-  onUseAiSuggestion?: (scene: EstimatedScene) => void;
+  onAiSuggestionOpenFailed?: (scene: EstimatedScene) => void;
+  onClearCutSceneError?: () => void;
+  onReviewSheetVisibilityChange?: (visible: boolean) => void;
+  onDurationDetected?: (duration: number) => void;
   onRefreshAiSuggestions?: () => void;
   onChangeDrafts: (drafts: CutSceneDraft[]) => void;
   onSave: () => void;
@@ -32,6 +41,8 @@ type EditCutScenesScreenProps = {
 export function EditCutScenesScreen({
   title,
   subtitle,
+  videoUri,
+  videoFileName,
   videoDuration,
   sceneDrafts,
   cutSceneError,
@@ -40,12 +51,29 @@ export function EditCutScenesScreen({
   aiSuggestions = [],
   aiMessage = null,
   isLoadingAiSuggestions = false,
-  onUseAiSuggestion,
+  onAiSuggestionOpenFailed,
+  onClearCutSceneError,
+  onReviewSheetVisibilityChange,
+  onDurationDetected,
   onRefreshAiSuggestions,
   onChangeDrafts,
   onSave,
   onBack,
 }: EditCutScenesScreenProps) {
+  const editorRef = useRef<CutSceneEditorHandle>(null);
+
+  const handleUseAiSuggestion = useCallback(
+    (scene: EstimatedScene) => {
+      const opened = editorRef.current?.openFromAiSuggestion(scene);
+      if (!opened) {
+        onAiSuggestionOpenFailed?.(scene);
+        return;
+      }
+      onClearCutSceneError?.();
+    },
+    [onAiSuggestionOpenFailed, onClearCutSceneError],
+  );
+
   const showAiSection =
     isLoadingAiSuggestions ||
     aiSuggestions.length > 0 ||
@@ -135,18 +163,16 @@ export function EditCutScenesScreen({
                     </Text>
                   </View>
 
-                  {onUseAiSuggestion ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={isSaving}
-                      onPress={() => onUseAiSuggestion(scene)}
-                      style={({pressed}) => [
-                        localStyles.useButton,
-                        pressed && styles.buttonPressed,
-                      ]}>
-                      <Text style={localStyles.useButtonText}>Use</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSaving}
+                    onPress={() => handleUseAiSuggestion(scene)}
+                    style={({pressed}) => [
+                      localStyles.useButton,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <Text style={localStyles.useButtonText}>Use</Text>
+                  </Pressable>
                 </View>
               );
             })}
@@ -154,9 +180,15 @@ export function EditCutScenesScreen({
         ) : null}
 
         <CutSceneEditor
+          ref={editorRef}
           errorMessage={cutSceneError}
           onChange={onChangeDrafts}
+          onReviewSheetVisibilityChange={onReviewSheetVisibilityChange}
+          onDurationDetected={onDurationDetected}
           scenes={sceneDrafts}
+          videoDuration={videoDuration}
+          videoFileName={videoFileName}
+          videoUri={videoUri}
         />
       </View>
 

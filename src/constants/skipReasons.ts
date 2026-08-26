@@ -4,6 +4,13 @@ export type SkipReason =
   | 'sexual_content'
   | 'other';
 
+/** Values accepted by the backend cut_scenes.reason enum. */
+export type ApiSkipReason =
+  | 'violence'
+  | 'inappropriate'
+  | 'eighteen_plus'
+  | 'unknown';
+
 export type SkipReasonStyle = {
   backgroundColor: string;
   borderColor: string;
@@ -56,6 +63,14 @@ export const SKIP_REASONS: {
 const LEGACY_REASON_MAP: Record<string, SkipReason> = {
   inappropriate: 'language',
   eighteen_plus: 'sexual_content',
+  unknown: 'other',
+};
+
+const APP_TO_API_REASON: Record<SkipReason, ApiSkipReason> = {
+  violence: 'violence',
+  language: 'inappropriate',
+  sexual_content: 'eighteen_plus',
+  other: 'unknown',
 };
 
 export function isSkipReason(value: string): value is SkipReason {
@@ -68,6 +83,16 @@ export function normalizeSkipReason(value: string): SkipReason | '' {
   }
 
   return LEGACY_REASON_MAP[value] ?? '';
+}
+
+/** Map app UI reasons onto the backend enum before create/update. */
+export function toApiSkipReason(reason: SkipReason | string): ApiSkipReason {
+  const normalized = normalizeSkipReason(reason);
+  if (!normalized) {
+    return 'unknown';
+  }
+
+  return APP_TO_API_REASON[normalized];
 }
 
 export function getSkipReasonLabel(value: string): string {

@@ -1,9 +1,16 @@
-import type {SkipReason} from '../constants/skipReasons';
+import type {ApiSkipReason, SkipReason} from '../constants/skipReasons';
 
 export type CutScene = {
   start: number;
   end: number;
   reason: SkipReason;
+};
+
+/** Wire format for create/update payloads (backend enum). */
+export type ApiCutScene = {
+  start: number;
+  end: number;
+  reason: ApiSkipReason;
 };
 
 export type ContentType = 'movie' | 'episode';
@@ -21,14 +28,14 @@ export type CreateMovieRequest = {
   title: string;
   release_year: number;
   duration: number;
-  cut_scenes: CutScene[];
+  cut_scenes: ApiCutScene[];
 };
 
 export type UpdateMovieRequest = {
   title: string;
   release_year: number;
   duration: number;
-  cut_scenes: CutScene[];
+  cut_scenes: ApiCutScene[];
 };
 
 export type MovieResponse = {
@@ -76,7 +83,7 @@ export type CreateEpisodeRequest = {
   season_number: number;
   episode_number: number;
   duration: number;
-  cut_scenes: CutScene[];
+  cut_scenes: ApiCutScene[];
   episode_id?: string;
 };
 
@@ -85,7 +92,7 @@ export type UpdateEpisodeRequest = {
   season_number: number;
   episode_number: number;
   duration: number;
-  cut_scenes: CutScene[];
+  cut_scenes: ApiCutScene[];
 };
 
 export type EpisodeResponse = {
