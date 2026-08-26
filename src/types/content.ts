@@ -120,3 +120,42 @@ export type EpisodeExistsResponse =
 export type ApiErrorDetail = {
   detail?: string | Array<{loc: string[]; msg: string; type: string}>;
 };
+
+// --- Movie AI / smart preview ---
+
+export type PreviewSource = 'database' | 'ai_preview';
+
+export type AiCategory = 'Kissing' | 'Sexual Content' | 'Nudity';
+
+export type EstimatedScene = {
+  category: AiCategory | string;
+  estimated_time: string;
+  description: string;
+};
+
+export type MoviePreviewParams = {
+  movieId: string;
+  title: string;
+  release_year: number;
+};
+
+export type DatabasePreviewResponse = {
+  source: 'database';
+  movie_id: string;
+  title: string;
+  release_year: number;
+  cut_scenes: CutScene[];
+  message: string;
+};
+
+export type AiPreviewResponse = {
+  source: 'ai_preview';
+  movie_id: string;
+  title: string;
+  release_year: number;
+  has_inappropriate_content: boolean;
+  estimated_scenes: EstimatedScene[];
+  message: string;
+};
+
+export type PreviewResponse = DatabasePreviewResponse | AiPreviewResponse;

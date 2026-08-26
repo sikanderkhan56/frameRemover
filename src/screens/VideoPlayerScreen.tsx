@@ -24,6 +24,7 @@ import {useSystemVolume} from '../hooks/useSystemVolume';
 import {
   useCreateEpisodeMutation,
   useCreateMovieMutation,
+  useForceMovieAiPreviewMutation,
   useLazyCheckEpisodeExistsQuery,
   useLazyCheckMovieExistsQuery,
   useLazyGetEpisodeByIdQuery,
@@ -36,6 +37,7 @@ import {setupStyles as styles} from '../theme/setupStyles';
 import type {
   ContentType,
   CutScene,
+  EstimatedScene,
   MovieSuggestion,
 } from '../types/content';
 import {
@@ -49,6 +51,7 @@ import type {
   SeekablePlayerHandle,
 } from '../types/player';
 import {getApiErrorDetail, isFetchBaseQueryError} from '../utils/apiErrors';
+import {estimatedSceneToDraft} from '../utils/aiPreview';
 import {cutScenesToDrafts} from '../utils/cutSceneDrafts';
 import {
   buildEpisodeIdPreview,
@@ -103,6 +106,9 @@ export function VideoPlayerScreen() {
   const [videoDuration, setVideoDuration] = useState(0);
   const [cutScenes, setCutScenes] = useState<CutScene[]>([]);
   const [sceneDrafts, setSceneDrafts] = useState<CutSceneDraft[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<EstimatedScene[]>([]);
+  const [aiPreviewMessage, setAiPreviewMessage] = useState<string | null>(null);
+  const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false);
 
   const [isPicking, setIsPicking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -128,6 +134,7 @@ export function VideoPlayerScreen() {
     useCreateEpisodeMutation();
   const [updateEpisode, {isLoading: isUpdatingEpisode}] =
     useUpdateEpisodeMutation();
+  const [forceMovieAiPreview] = useForceMovieAiPreviewMutation();
 
   const isSaving =
     isCreatingMovie || isUpdatingMovie || isCreatingEpisode || isUpdatingEpisode;
@@ -239,6 +246,9 @@ export function VideoPlayerScreen() {
     setVideoDuration(0);
     setCutScenes([]);
     setSceneDrafts([]);
+    setAiSuggestions([]);
+    setAiPreviewMessage(null);
+    setIsLoadingAiSuggestions(false);
     setErrorMessage(null);
     setCutSceneError(null);
     setPaused(false);
@@ -316,6 +326,9 @@ export function VideoPlayerScreen() {
       setExistingSceneCount(0);
       setCutScenes([]);
       setSceneDrafts([]);
+      setAiSuggestions([]);
+      setAiPreviewMessage(null);
+      setIsLoadingAiSuggestions(false);
       setStep('choose_content_type');
     } catch (error) {
       if (
@@ -547,6 +560,9 @@ export function VideoPlayerScreen() {
 
   const handleEditExisting = useCallback(async () => {
     setCutSceneError(null);
+    setAiSuggestions([]);
+    setAiPreviewMessage(null);
+    setIsLoadingAiSuggestions(false);
     setStep('checking');
 
     try {
@@ -607,12 +623,104 @@ export function VideoPlayerScreen() {
     seriesTitle,
   ]);
 
+  const fetchMovieAiSuggestions = useCallback(
+    async (movieId: string, title: string, year: number) => {
+      setIsLoadingAiSuggestions(true);
+      setAiSuggestions([]);
+      setAiPreviewMessage(null);
+
+      try {
+        const preview = await forceMovieAiPreview({
+          movieId,
+          title,
+          release_year: year,
+        }).unwrap();
+
+        setAiSuggestions(preview.estimated_scenes ?? []);
+        setAiPreviewMessage(preview.message ?? null);
+      } catch (error) {
+        setAiSuggestions([]);
+        setAiPreviewMessage(
+          getApiErrorDetail(error) ??
+            'Could not load AI scene suggestions. You can still add scenes manually.',
+        );
+      } finally {
+        setIsLoadingAiSuggestions(false);
+      }
+    },
+    [forceMovieAiPreview],
+  );
+
   const handleStartCutSceneEntry = useCallback(() => {
     setCutSceneError(null);
     setSceneDrafts([]);
     setSceneEditMode('create');
+    setAiSuggestions([]);
+    setAiPreviewMessage(null);
+
+    if (contentType === 'movie') {
+      const trimmedTitle = movieTitle.trim();
+      const yearResult = parseReleaseYear(releaseYear);
+
+      if (trimmedTitle && yearResult.value !== null) {
+        const movieId = buildMovieId(trimmedTitle, yearResult.value);
+        setContentId(movieId);
+        setContentLabel(`${trimmedTitle} (${yearResult.value})`);
+        setStep('edit_cut_scenes');
+        void fetchMovieAiSuggestions(
+          movieId,
+          trimmedTitle,
+          yearResult.value,
+        );
+        return;
+      }
+    }
+
     setStep('edit_cut_scenes');
-  }, []);
+  }, [
+    contentType,
+    fetchMovieAiSuggestions,
+    movieTitle,
+    releaseYear,
+  ]);
+
+  const handleRefreshAiSuggestions = useCallback(() => {
+    if (contentType !== 'movie') {
+      return;
+    }
+
+    const trimmedTitle = movieTitle.trim();
+    const yearResult = parseReleaseYear(releaseYear);
+    if (!trimmedTitle || yearResult.value === null) {
+      return;
+    }
+
+    const movieId =
+      contentId || buildMovieId(trimmedTitle, yearResult.value);
+    void fetchMovieAiSuggestions(movieId, trimmedTitle, yearResult.value);
+  }, [
+    contentId,
+    contentType,
+    fetchMovieAiSuggestions,
+    movieTitle,
+    releaseYear,
+  ]);
+
+  const handleUseAiSuggestion = useCallback(
+    (scene: EstimatedScene) => {
+      const draft = estimatedSceneToDraft(scene);
+      if (!draft) {
+        setCutSceneError(
+          `Could not parse AI time "${scene.estimated_time}". Add this scene manually.`,
+        );
+        return;
+      }
+
+      setCutSceneError(null);
+      setSceneDrafts(current => [...current, draft]);
+    },
+    [],
+  );
 
   const handleSaveContent = useCallback(async () => {
     if (!contentType) {
@@ -1024,13 +1132,38 @@ export function VideoPlayerScreen() {
 
           {isEditCutScenes ? (
             <EditCutScenesScreen
+              aiMessage={
+                sceneEditMode === 'create' && contentType === 'movie'
+                  ? aiPreviewMessage
+                  : null
+              }
+              aiSuggestions={
+                sceneEditMode === 'create' && contentType === 'movie'
+                  ? aiSuggestions
+                  : []
+              }
               cutSceneError={cutSceneError}
+              isLoadingAiSuggestions={
+                sceneEditMode === 'create' &&
+                contentType === 'movie' &&
+                isLoadingAiSuggestions
+              }
               isSaving={step === 'saving' || isSaving}
               onBack={handleEditBack}
               onChangeDrafts={setSceneDrafts}
+              onRefreshAiSuggestions={
+                sceneEditMode === 'create' && contentType === 'movie'
+                  ? handleRefreshAiSuggestions
+                  : undefined
+              }
               onSave={() => {
                 void handleSaveContent();
               }}
+              onUseAiSuggestion={
+                sceneEditMode === 'create' && contentType === 'movie'
+                  ? handleUseAiSuggestion
+                  : undefined
+              }
               saveLabel={saveLabel}
               sceneDrafts={sceneDrafts}
               subtitle={editSubtitle}
