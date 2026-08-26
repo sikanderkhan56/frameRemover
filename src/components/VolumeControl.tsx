@@ -9,8 +9,8 @@ type VolumeControlProps = {
   onVolumeChange: (value: number) => void;
 };
 
-const COLLAPSED_WIDTH = 44;
-const EXPANDED_WIDTH = 128;
+const COLLAPSED_WIDTH = 45;
+const EXPANDED_WIDTH = 124;
 const AUTO_HIDE_MS = 3000;
 
 function volumeIconName(volume: number): 'volume-mute' | 'volume-low' | 'volume-medium' | 'volume-high' {
@@ -108,7 +108,7 @@ export function VolumeControl({volume, onVolumeChange}: VolumeControlProps) {
         <Ionicons
           color={theme.white}
           name={volumeIconName(volume)}
-          size={20}
+          size={16}
         />
       </Pressable>
 
@@ -142,15 +142,15 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     backgroundColor: theme.glass,
-    borderRadius: 22,
+    borderRadius: 20,
     flexDirection: 'row',
-    height: 44,
+    height: 40,
     overflow: 'hidden',
     paddingHorizontal: 8,
   },
   sliderSlot: {
     flex: 1,
-    height: 44,
+    height: 40,
     justifyContent: 'center',
   },
   slider: {
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   button: {
     alignItems: 'center',
-    height: 44,
+    height: 40,
     justifyContent: 'center',
     width: 28,
   },

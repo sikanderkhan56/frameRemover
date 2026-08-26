@@ -72,7 +72,7 @@ export function VideoControls({
               styles.centerButton,
               pressed && styles.pressed,
             ]}>
-            <Ionicons color={theme.white} name="play-back" size={22} />
+            <Ionicons color={theme.white} name="play-back" size={18} />
             <Text style={styles.skipBadge}>{SKIP_SECONDS}</Text>
           </Pressable>
 
@@ -87,7 +87,7 @@ export function VideoControls({
             <Ionicons
               color={theme.white}
               name={paused ? 'play' : 'pause'}
-              size={28}
+              size={24}
               style={paused ? styles.playIconOffset : undefined}
             />
           </Pressable>
@@ -100,7 +100,7 @@ export function VideoControls({
               styles.centerButton,
               pressed && styles.pressed,
             ]}>
-            <Ionicons color={theme.white} name="play-forward" size={22} />
+            <Ionicons color={theme.white} name="play-forward" size={18} />
             <Text style={styles.skipBadge}>{SKIP_SECONDS}</Text>
           </Pressable>
         </View>
@@ -147,7 +147,7 @@ export function VideoControls({
               <Ionicons
                 color={theme.white}
                 name={isFillMode ? 'contract-outline' : 'expand-outline'}
-                size={20}
+                size={16}
               />
             </Pressable>
 
@@ -166,7 +166,7 @@ export function VideoControls({
                 name={
                   isFullscreen ? 'close-outline' : 'tablet-landscape-outline'
                 }
-                size={22}
+                size={18}
               />
             </Pressable>
           </View>
@@ -195,30 +195,30 @@ const styles = StyleSheet.create({
   centerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 28,
+    gap: 24,
     justifyContent: 'center',
   },
   centerButton: {
     alignItems: 'center',
     backgroundColor: theme.glass,
-    borderRadius: 28,
-    height: 56,
+    borderRadius: 26,
+    height: 44,
     justifyContent: 'center',
-    width: 56,
+    width: 42,
   },
   skipBadge: {
     color: theme.white,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     marginTop: 1,
   },
   playButton: {
     alignItems: 'center',
     backgroundColor: theme.orange,
-    borderRadius: 34,
-    height: 68,
+    borderRadius: 32,
+    height: 44,
     justifyContent: 'center',
-    width: 68,
+    width: 44,
   },
   playIconOffset: {
     marginLeft: 3,
@@ -263,16 +263,16 @@ const styles = StyleSheet.create({
   cornerButtonGroup: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginLeft: 'auto',
   },
   cornerButton: {
     alignItems: 'center',
     backgroundColor: theme.glass,
-    borderRadius: 22,
-    height: 44,
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    width: 44,
+    width: 40,
   },
   timeText: {
     color: 'rgba(255,255,255,0.95)',

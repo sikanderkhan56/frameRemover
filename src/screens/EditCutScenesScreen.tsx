@@ -152,14 +152,11 @@ export function EditCutScenesScreen({
                           localStyles.categoryTagText,
                           {color: reasonStyle.textColor},
                         ]}>
-                        {scene.category || getSkipReasonLabel(reason)}
+                        {getSkipReasonLabel(reason)}
                       </Text>
                     </View>
                     <Text style={localStyles.suggestionTime}>
                       {scene.estimated_time}
-                    </Text>
-                    <Text style={localStyles.suggestionDescription}>
-                      {scene.description}
                     </Text>
                   </View>
 
@@ -282,11 +279,6 @@ const localStyles = StyleSheet.create({
     fontSize: 14,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
-  },
-  suggestionDescription: {
-    color: '#6B7280',
-    fontSize: 13,
-    lineHeight: 18,
   },
   useButton: {
     backgroundColor: '#FF6B00',
